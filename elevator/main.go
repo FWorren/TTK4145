@@ -13,6 +13,8 @@ func main() {
     }
     fmt.Println("Press STOP button to stop elevator and exit program.\n");
 
+    network.Network()
+
     driver.Elev_set_speed(300)
 
     for {

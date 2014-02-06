@@ -43,14 +43,16 @@ func Elev_init() int {
 }
 
 func Elev_init_channel_matrix() {
-    lamp_channel_matrix[1] = []int{LIGHT_UP1, LIGHT_DOWN1, LIGHT_COMMAND1}
-    lamp_channel_matrix[2] = []int{LIGHT_UP2, LIGHT_DOWN2, LIGHT_COMMAND2}
-    lamp_channel_matrix[3] = []int{LIGHT_UP3, LIGHT_DOWN3, LIGHT_COMMAND3}
-    lamp_channel_matrix[4] = []int{LIGHT_UP4, LIGHT_DOWN4, LIGHT_COMMAND4}
-    button_channel_matrix[1] = []int{FLOOR_UP1, FLOOR_DOWN1, FLOOR_COMMAND1}
-    button_channel_matrix[2] = []int{FLOOR_UP2, FLOOR_DOWN2, FLOOR_COMMAND2}
-    button_channel_matrix[3] = []int{FLOOR_UP3, FLOOR_DOWN3, FLOOR_COMMAND3}
-    button_channel_matrix[4] = []int{FLOOR_UP4, FLOOR_DOWN4, FLOOR_COMMAND4}
+    lamp_channel_matrix := make(map[int][]int)
+    button_channel_matrix := make(map[int][]int)
+    lamp_channel_matrix[0] = []int{LIGHT_UP1, LIGHT_DOWN1, LIGHT_COMMAND1}
+    lamp_channel_matrix[1] = []int{LIGHT_UP2, LIGHT_DOWN2, LIGHT_COMMAND2}
+    lamp_channel_matrix[2] = []int{LIGHT_UP3, LIGHT_DOWN3, LIGHT_COMMAND3}
+    lamp_channel_matrix[3] = []int{LIGHT_UP4, LIGHT_DOWN4, LIGHT_COMMAND4}
+    button_channel_matrix[0] = []int{FLOOR_UP1, FLOOR_DOWN1, FLOOR_COMMAND1}
+    button_channel_matrix[1] = []int{FLOOR_UP2, FLOOR_DOWN2, FLOOR_COMMAND2}
+    button_channel_matrix[2] = []int{FLOOR_UP3, FLOOR_DOWN3, FLOOR_COMMAND3}
+    button_channel_matrix[3] = []int{FLOOR_UP4, FLOOR_DOWN4, FLOOR_COMMAND4}
 }
 
 func Elev_set_speed(speed int){
@@ -84,7 +86,7 @@ func Elev_get_floor_sensor_signal() int {
 
 func Elev_get_button_signal(button elev_button_type_t, floor int) int {
     // Need error handling before proceeding
-    if Io_read_bit(button_channel_matrix[floor][button]) {
+    if Io_read_bit(button_channel_matrix[floor][int(button)]) {
         return 1
     }else {
         return 0
@@ -101,19 +103,19 @@ func Elev_get_obstruction_signal() bool {
 
 func Elev_set_floor_indicator(floor int){
     // Need error handling before proceeding
-    switch {
-    case floor == 0:
-        Io_clear_bit(FLOOR_IND1)
-        Io_clear_bit(FLOOR_IND2)
-    case floor == 1:
-        Io_set_bit(FLOOR_IND1)
-        Io_clear_bit(FLOOR_IND2)
-    case floor == 2:
-        Io_clear_bit(FLOOR_IND1)
-        Io_set_bit(FLOOR_IND2)
-    case floor == 3:
-        Io_set_bit(FLOOR_IND1)
-        Io_set_bit(FLOOR_IND2)
+    switch floor{
+        case 0:
+            Io_clear_bit(FLOOR_IND1)
+            Io_clear_bit(FLOOR_IND2)
+        case 1:
+            Io_set_bit(FLOOR_IND1)
+            Io_clear_bit(FLOOR_IND2)
+        case 2:
+            Io_clear_bit(FLOOR_IND1)
+            Io_set_bit(FLOOR_IND2)
+        case 3:
+            Io_set_bit(FLOOR_IND1)
+            Io_set_bit(FLOOR_IND2)
     }
 }
 
