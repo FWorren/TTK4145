@@ -15,8 +15,8 @@ const  (
     BUTTON_COMMAND 
 )
 
-var lamp_channel_matrix int
-var button_channel_matrix int
+var lamp_channel_matrix map[int][]int
+var button_channel_matrix map[int][]int
 
 func Elev_init() int {
     if !Io_init() {
@@ -43,15 +43,14 @@ func Elev_init() int {
 }
 
 func Elev_init_channel_matrix() {
-    lamp_channel_matrix = {
-        {LIGHT_UP1, LIGHT_DOWN1, LIGHT_COMMAND1}, {LIGHT_UP2, LIGHT_DOWN2, LIGHT_COMMAND2},
-        {LIGHT_UP3, LIGHT_DOWN3, LIGHT_COMMAND3}, {LIGHT_UP4, LIGHT_DOWN4, LIGHT_COMMAND4},
-    }
-
-    button_channel_matrix = {
-        {FLOOR_UP1, FLOOR_DOWN1, FLOOR_COMMAND1}, {FLOOR_UP2, FLOOR_DOWN2, FLOOR_COMMAND2},
-        {FLOOR_UP3, FLOOR_DOWN3, FLOOR_COMMAND3}, {FLOOR_UP4, FLOOR_DOWN4, FLOOR_COMMAND4},
-    }
+    lamp_channel_matrix[1] = []int{LIGHT_UP1, LIGHT_DOWN1, LIGHT_COMMAND1}
+    lamp_channel_matrix[2] = []int{LIGHT_UP2, LIGHT_DOWN2, LIGHT_COMMAND2}
+    lamp_channel_matrix[3] = []int{LIGHT_UP3, LIGHT_DOWN3, LIGHT_COMMAND3}
+    lamp_channel_matrix[4] = []int{LIGHT_UP4, LIGHT_DOWN4, LIGHT_COMMAND4}
+    button_channel_matrix[1] = []int{FLOOR_UP1, FLOOR_DOWN1, FLOOR_COMMAND1}
+    button_channel_matrix[2] = []int{FLOOR_UP2, FLOOR_DOWN2, FLOOR_COMMAND2}
+    button_channel_matrix[3] = []int{FLOOR_UP3, FLOOR_DOWN3, FLOOR_COMMAND3}
+    button_channel_matrix[4] = []int{FLOOR_UP4, FLOOR_DOWN4, FLOOR_COMMAND4}
 }
 
 func Elev_set_speed(speed int){
