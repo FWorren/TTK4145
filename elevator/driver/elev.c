@@ -33,7 +33,8 @@ int elev_init(void){
         return 0;
 
     // Zero all floor button lamps
-    for (int i = 0; i < N_FLOORS; ++i) {
+	int i;
+    for (i = 0; i < N_FLOORS; ++i) {
         if (i != 0)
             elev_set_button_lamp(BUTTON_CALL_DOWN, i, 0);
 

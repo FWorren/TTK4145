@@ -22,8 +22,9 @@ int io_init(){
   
     if (it_g == NULL)
         return 0;
-
-    for (int i = 0; i < 8; i++) {
+	
+	int i;
+    for (i = 0; i < 8; i++) {
         status |= comedi_dio_config(it_g, PORT1, i,     COMEDI_INPUT);
         status |= comedi_dio_config(it_g, PORT2, i,     COMEDI_OUTPUT);
         status |= comedi_dio_config(it_g, PORT3, i+8,   COMEDI_OUTPUT);
