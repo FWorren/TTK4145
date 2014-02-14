@@ -1,6 +1,9 @@
 package driver
 
-import "fmt"
+import (
+	"fmt"
+	//"time"
+)
 
 var command [N_FLOORS]int
 
@@ -16,7 +19,7 @@ var Order_state Order_state_t
 
 type Order struct {
 	floor int
-	dir int
+	dir   int
 }
 
 var Head_order Order
@@ -28,47 +31,66 @@ func OrderLogic_init() {
 	}
 }
 
+/*
 func OrderLogic_search_for_orders() {
-	for i := 0; i < N_FLOORS; i++ {
-		if Elev_get_button_signal(BUTTON_COMMAND,i) == 1 {
-			if command[i] != 1 {
-				command[i] = 1
-				Elev_set_button_lamp(BUTTON_COMMAND,i,1)
+	for {
+		for i := 0; i < N_FLOORS; i++ {
+			if Elev_get_button_signal(BUTTON_COMMAND, i) == 1 {
+				if command[i] != 1 {
+					command[i] = 1
+					Elev_set_button_lamp(BUTTON_COMMAND, i, 1)
+				}
 			}
 		}
 	}
+}*/
+
+func OrderLogic_search_for_orders(order_chan chan int) {
+	for {
+		for i := 0; i < N_FLOORS; i++ {
+			if Elev_get_button_signal(BUTTON_COMMAND, i) == 1 {
+				order_chan <- i
+			}
+		}
+	}
+}
+
+func OrderLogic_set_order(order_chan chan int) {
+
 }
 
 func OrderLogic_set_head_order() {
 	OrderLogic_set_order_state()
 	for {
 		switch Order_state {
-			case UP:
-				OrderLogic_state_up()
-			case DOWN:
-				OrderLogic_state_down()
-			default:
-				fmt.Println("Error! No queue!\n")
-				Order_state = SET
+		case UP:
+			OrderLogic_state_up()
+		case DOWN:
+			OrderLogic_state_down()
+		default:
+			fmt.Println("Error! No queue!\n")
+			Order_state = SET
 		}
-		if Order_state == SET {break}
+		if Order_state == SET {
+			break
+		}
 	}
 }
 
 func OrderLogic_set_order_state() {
 	if Previous_order.dir == 1 {
 		Order_state = UP
-	}else{
+	} else {
 		Order_state = DOWN
 	}
 }
 
 func OrderLogic_state_up() {
-	if Previous_order.floor == N_FLOORS - 1 {
-		Order_state = DOWN;
-		return;
+	if Previous_order.floor == N_FLOORS-1 {
+		Order_state = DOWN
+		return
 	}
-	for i := Previous_order.floor+1; i < N_FLOORS; i++ {
+	for i := Previous_order.floor + 1; i < N_FLOORS; i++ {
 		if command[i] == 1 {
 			Head_order.floor = i
 			Head_order.dir = 1
@@ -81,10 +103,10 @@ func OrderLogic_state_up() {
 
 func OrderLogic_state_down() {
 	if Previous_order.floor == 0 {
-		Order_state = UP;
-		return;
+		Order_state = UP
+		return
 	}
-	for i := Previous_order.floor-1; i >= 0; i-- {
+	for i := Previous_order.floor - 1; i >= 0; i-- {
 		if command[i] == 1 {
 			Head_order.floor = i
 			Head_order.dir = -1
@@ -121,5 +143,7 @@ func OrderLogic_update_previous_order(floor int, direction int) {
 func OrderLogic_delete_current_order(current_floor int) {
 	Previous_order.floor = Head_order.floor
 	Previous_order.dir = Head_order.dir
-	if command[current_floor] == 1 {command[current_floor] = 0 }
+	if command[current_floor] == 1 {
+		command[current_floor] = 0
+	}
 }
