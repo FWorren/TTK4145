@@ -38,8 +38,8 @@ func Elevator_init() {
 			break
 		}
 	}
-	order_internal := make(chan int, 1)
-	order_from_network := make(chan int, 1)
+	order_internal := make(chan []byte)
+	order_from_network := make(chan int)
 	go OrderLogic_search_for_orders(order_internal)
 	go OrderLogic_set_order(order_internal, order_from_network)
 }

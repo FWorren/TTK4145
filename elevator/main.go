@@ -2,7 +2,7 @@ package main
 
 import (
 	driver "./driver"
-	network "./network"
+	//network "./network"
 	"fmt"
 )
 
@@ -14,7 +14,7 @@ func main() {
 
 	fmt.Println("Press STOP button to stop elevator and exit program.\n")
 
-	network.Network()
+	//network.Network()
 	driver.State = driver.UNDEF
 	driver.Elevator_statemachine()
 }

@@ -2,6 +2,7 @@ package driver
 
 import (
 	"fmt"
+	"encoding/json"
 	//"time"
 )
 
@@ -45,24 +46,51 @@ func OrderLogic_search_for_orders() {
 	}
 }*/
 
-func OrderLogic_search_for_orders(order_internal chan int) {
+func OrderLogic_search_for_orders(order_internal chan []byte) {
+	type Order_t struct {
+		floor int
+		button elev_button_type_t
+	}
+	var New_order Order_t 
 	for {
 		for i := 0; i < N_FLOORS; i++ {
 			if Elev_get_button_signal(BUTTON_COMMAND, i) == 1 {
-				order_chan <- i
+				New_order.floor = i
+				New_order.button = BUTTON_COMMAND
+				b, err := json.Marshal(New_order)
+				order_internal <- b
+			}
+			if i > 0 {
+				if Elev_get_button_signal(BUTTON_CALL_DOWN, i) == 1 {
+					New_order.floor = i
+					New_order.button = BUTTON_CALL_DOWN
+					b, err := json.Marshal(New_order)
+					order_internal <- b
+				}	
+			}
+			if i < N_FLOORS-1 {
+				if Elev_get_button_signal(BUTTON_CALL_UP, i) == 1 {
+					New_order.floor = i
+					New_order.button = BUTTON_CALL_UP
+					b, err := json.Marshal(New_order)
+					order_internal <- b
+				}	
 			}
 		}
 	}
 }
 
-func OrderLogic_set_order(order_internal chan int, order_from_network chan int) {
+func OrderLogic_set_order(order_internal chan []byte, order_from_network chan int) {
 	for {
 		select {
 			case internal := <- order_internal:
-				command[internal] = 1
+				var msg struct{}
+				err := json.Unmarshal(internal,&msg)
+				Elev_set_button_lamp(msg.button,msg.floor,1)
 			case network := <- order_from_network:
-				command[internal] = 1
+				command[0] = 1
 			default:
+
 		}
 	}
 }

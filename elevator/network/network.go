@@ -34,7 +34,7 @@ func Inter_process_communication(msg_from_network chan string, msg_to_network ch
 			case msg :=<- msg_from_network:
 
 			case <- msg_to_network:
-				
+
 			default:
 				time.Sleep(10 * time.Millisecond)
 		}
