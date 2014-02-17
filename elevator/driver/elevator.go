@@ -38,28 +38,30 @@ func Elevator_init() {
 			break
 		}
 	}
-	order_chan := make(chan int, 1)
-	go OrderLogic_search_for_orders(order_chan)
+	order_internal := make(chan int, 1)
+	order_from_network := make(chan int, 1)
+	go OrderLogic_search_for_orders(order_internal)
+	go OrderLogic_set_order(order_internal, order_from_network)
 }
 
 func Elevator_statemachine() {
 	for {
 		switch State {
-		case RUN:
-			Elevator_run()
-		case WAIT:
-			Elevator_wait()
-		case DOOR:
-			Elevator_door()
-		case STOPS:
-			Elevator_stop()
-		case STOP_OBS:
-			Elevator_stop_obstruction()
-		case UNDEF:
-			Elevator_init()
-		default:
-			fmt.Println("Error! Program terminated!\n")
-			State = EXIT
+			case RUN:
+				Elevator_run()
+			case WAIT:
+				Elevator_wait()
+			case DOOR:
+				Elevator_door()
+			case STOPS:
+				Elevator_stop()
+			case STOP_OBS:
+				Elevator_stop_obstruction()
+			case UNDEF:
+				Elevator_init()
+			default:
+				fmt.Println("Error! Program terminated!\n")
+				State = EXIT
 		}
 		if State == EXIT {
 			break
@@ -71,11 +73,10 @@ func Elevator_wait() {
 	for {
 		if OrderLogic_get_number_of_orders() > 0 {
 			State = RUN
+			break
 		}
 		if Elev_get_stop_signal() {
 			State = STOPS
-		}
-		if State != WAIT || State == STOPS {
 			break
 		}
 	}
@@ -138,7 +139,6 @@ func Elevator_stop() {
 		Elev_set_door_open_lamp(1)
 	}
 	for {
-		//OrderLogic_search_for_orders()
 		if OrderLogic_get_number_of_orders() > 0 {
 			State = RUN
 			break

@@ -45,7 +45,7 @@ func OrderLogic_search_for_orders() {
 	}
 }*/
 
-func OrderLogic_search_for_orders(order_chan chan int) {
+func OrderLogic_search_for_orders(order_internal chan int) {
 	for {
 		for i := 0; i < N_FLOORS; i++ {
 			if Elev_get_button_signal(BUTTON_COMMAND, i) == 1 {
@@ -55,21 +55,29 @@ func OrderLogic_search_for_orders(order_chan chan int) {
 	}
 }
 
-func OrderLogic_set_order(order_chan chan int) {
-
+func OrderLogic_set_order(order_internal chan int, order_from_network chan int) {
+	for {
+		select {
+			case internal := <- order_internal:
+				command[internal] = 1
+			case network := <- order_from_network:
+				command[internal] = 1
+			default:
+		}
+	}
 }
 
 func OrderLogic_set_head_order() {
 	OrderLogic_set_order_state()
 	for {
 		switch Order_state {
-		case UP:
-			OrderLogic_state_up()
-		case DOWN:
-			OrderLogic_state_down()
-		default:
-			fmt.Println("Error! No queue!\n")
-			Order_state = SET
+			case UP:
+				OrderLogic_state_up()
+			case DOWN:
+				OrderLogic_state_down()
+			default:
+				fmt.Println("Error! No queue!\n")
+				Order_state = SET
 		}
 		if Order_state == SET {
 			break

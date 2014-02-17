@@ -17,5 +17,4 @@ func main() {
 	network.Network()
 	driver.State = driver.UNDEF
 	driver.Elevator_statemachine()
-
 }
