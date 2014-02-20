@@ -8,9 +8,9 @@ import (
 )
 
 type Client struct {
-	IP net.IP
-	Time time.Time
-	State State_t
+	All_ips map[string]time.Time
+	//State State_t
+	//Order Order_t
 }
 
 func Network() {
@@ -21,7 +21,7 @@ func Network() {
 	fmt.Println(localIP)
 	go Read_msg(msg_from_network, localIP)
 	go Send_msg(msg_to_network)
-	go Read_alive(all_ips, localIP)
+	go Read_alive(all_ips_m, localIP)
 	go Send_alive()
 	go Inter_process_communication(msg_from_network,msg_to_network)
 	/*neverQuit := make(chan string)
@@ -32,9 +32,9 @@ func Inter_process_communication(msg_from_network chan string, msg_to_network ch
 	for{
 		select{
 			case msg :=<- msg_from_network:
-
-			case <- msg_to_network:
-
+				fmt.Println(msg)
+			case <- time.After(5*time.Second):
+				fmt.Println("Hei")
 			default:
 				time.Sleep(10 * time.Millisecond)
 		}
@@ -100,7 +100,7 @@ func Read_alive(all_ips map[string]time.Time, localIP net.IP) {
 
 func Check_error(err error) {
 	if err != nil {
-		fmt.Println("Fatal error: %s", err.Error())
+		fmt.Println("error:", err)
 	}
 }
 

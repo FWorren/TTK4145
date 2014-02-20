@@ -1,162 +1,150 @@
 package driver
 
 import (
-	"fmt"
-	"encoding/json"
+	//"fmt"
+	//"encoding/json"
 	//"time"
 )
 
 var command [N_FLOORS]int
+var Up[N_FLOORS]int
+var Down[N_FLOORS]int
 
-type Order_state_t int
+type State_dir_t int
 
 const (
-	UP Order_state_t = iota
+	UP State_dir_t = iota
 	DOWN
 	SET
 )
 
-var Order_state Order_state_t
-
-type Order struct {
+type Order_t struct {
 	floor int
 	dir   int
 }
 
-var Head_order Order
-var Previous_order Order
+type Order_c struct {
+	floor int
+	button elev_button_type_t
+}
+
+var Head_order Order_t
+var Previous_order Order_t
 
 func OrderLogic_init() {
 	for i := 0; i < N_FLOORS; i++ {
 		command[i] = 0
+		Up[i] = 0
+		Down[i] = 0
 	}
 }
 
-/*
-func OrderLogic_search_for_orders() {
+func OrderLogic_search_for_orders(order_internal chan Order_c) {
+	var new_order Order_c
 	for {
 		for i := 0; i < N_FLOORS; i++ {
 			if Elev_get_button_signal(BUTTON_COMMAND, i) == 1 {
-				if command[i] != 1 {
-					command[i] = 1
-					Elev_set_button_lamp(BUTTON_COMMAND, i, 1)
-				}
+				new_order.floor = i
+				new_order.button = BUTTON_COMMAND
+				order_internal <- new_order
 			}
-		}
-	}
-}*/
-
-func OrderLogic_search_for_orders(order_internal chan []byte) {
-	type Order_t struct {
-		floor int
-		button elev_button_type_t
-	}
-	var New_order Order_t 
-	for {
-		for i := 0; i < N_FLOORS; i++ {
-			if Elev_get_button_signal(BUTTON_COMMAND, i) == 1 {
-				New_order.floor = i
-				New_order.button = BUTTON_COMMAND
-				b, err := json.Marshal(New_order)
-				order_internal <- b
-			}
-			if i > 0 {
+			if i > 0{
 				if Elev_get_button_signal(BUTTON_CALL_DOWN, i) == 1 {
-					New_order.floor = i
-					New_order.button = BUTTON_CALL_DOWN
-					b, err := json.Marshal(New_order)
-					order_internal <- b
+					new_order.floor = i
+					new_order.button = BUTTON_CALL_DOWN
+					order_internal <- new_order
 				}	
 			}
 			if i < N_FLOORS-1 {
 				if Elev_get_button_signal(BUTTON_CALL_UP, i) == 1 {
-					New_order.floor = i
-					New_order.button = BUTTON_CALL_UP
-					b, err := json.Marshal(New_order)
-					order_internal <- b
+					new_order.floor = i
+					new_order.button = BUTTON_CALL_UP
+					order_internal <- new_order
 				}	
 			}
 		}
 	}
 }
 
-func OrderLogic_set_order(order_internal chan []byte, order_from_network chan int) {
+func OrderLogic_set_order(order_internal chan Order_c, order_from_network chan Order_c) {
 	for {
 		select {
 			case internal := <- order_internal:
-				var msg struct{}
-				err := json.Unmarshal(internal,&msg)
-				Elev_set_button_lamp(msg.button,msg.floor,1)
-			case network := <- order_from_network:
-				command[0] = 1
-			default:
-
+				Elev_set_button_lamp(internal.button,internal.floor,1)
+				switch internal.button {
+					case BUTTON_COMMAND:
+						command[internal.floor] = 1
+					case BUTTON_CALL_UP:
+						Up[internal.floor] = 1
+					case BUTTON_CALL_DOWN:
+						Down[internal.floor] = 1
+				}
+			/*case from_network := <- order_from_network:
+				var msg []Order_c
+				err := json.Unmarshal([]byte(from_network),&msg)
+				if err != nil {
+					fmt.Println("error: ", err)	
+				}
+				fmt.Println(msg)*/
 		}
 	}
 }
 
 func OrderLogic_set_head_order() {
-	OrderLogic_set_order_state()
+	var State_dir State_dir_t
+	State_dir = OrderLogic_set_order_state()
 	for {
-		switch Order_state {
+		switch State_dir {
 			case UP:
-				OrderLogic_state_up()
+				State_dir = OrderLogic_state_up()
 			case DOWN:
-				OrderLogic_state_down()
-			default:
-				fmt.Println("Error! No queue!\n")
-				Order_state = SET
-		}
-		if Order_state == SET {
-			break
+				State_dir = OrderLogic_state_down()
+			case SET:
+				return
 		}
 	}
 }
 
-func OrderLogic_set_order_state() {
+func OrderLogic_set_order_state() State_dir_t {
 	if Previous_order.dir == 1 {
-		Order_state = UP
+		return UP
 	} else {
-		Order_state = DOWN
+		return DOWN
 	}
 }
 
-func OrderLogic_state_up() {
+func OrderLogic_state_up() State_dir_t {
 	if Previous_order.floor == N_FLOORS-1 {
-		Order_state = DOWN
-		return
+		return DOWN
 	}
 	for i := Previous_order.floor + 1; i < N_FLOORS; i++ {
-		if command[i] == 1 {
+		if command[i] == 1 || Up[i] == 1 || Down[i] == 1 {
 			Head_order.floor = i
 			Head_order.dir = 1
-			Order_state = SET
-			return
+			return SET
 		}
 	}
-	Order_state = DOWN
+	return DOWN
 }
 
-func OrderLogic_state_down() {
+func OrderLogic_state_down() State_dir_t {
 	if Previous_order.floor == 0 {
-		Order_state = UP
-		return
+		return UP
 	}
 	for i := Previous_order.floor - 1; i >= 0; i-- {
-		if command[i] == 1 {
+		if command[i] == 1 || Up[i] == 1 || Down[i] == 1 {
 			Head_order.floor = i
 			Head_order.dir = -1
-			Order_state = SET
-			return
+			return SET
 		}
 	}
-	Order_state = UP
+	return UP
 }
 
 func OrderLogic_get_number_of_orders() int {
 	n_orders := 0
 	for i := 0; i < N_FLOORS; i++ {
-		if command[i] == 1 {
+		if command[i] == 1 || Up[i] == 1 || Down[i] == 1 {
 			n_orders += 1
 		}
 	}
@@ -181,5 +169,11 @@ func OrderLogic_delete_current_order(current_floor int) {
 	Previous_order.dir = Head_order.dir
 	if command[current_floor] == 1 {
 		command[current_floor] = 0
+	}
+	if current_floor > 0 && Down[current_floor] == 1 {
+		Down[current_floor] = 0
+	}
+	if current_floor < N_FLOORS-1 && Up[current_floor] == 1 {
+		Up[current_floor] = 0
 	}
 }
