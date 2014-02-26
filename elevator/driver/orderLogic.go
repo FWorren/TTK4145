@@ -80,12 +80,7 @@ func OrderLogic_set_order(order_internal chan Order_c, order_from_network chan O
 						Down[internal.floor] = 1
 				}
 			/*case from_network := <- order_from_network:
-				var msg []Order_c
-				err := json.Unmarshal([]byte(from_network),&msg)
-				if err != nil {
-					fmt.Println("error: ", err)	
-				}
-				fmt.Println(msg)*/
+				fmt.Println("error: ", from_network)*/	
 		}
 	}
 }

@@ -24,19 +24,19 @@ func Network() {
 	go Read_alive(all_ips_m, localIP)
 	go Send_alive()
 	go Inter_process_communication(msg_from_network,msg_to_network)
-	/*neverQuit := make(chan string)
-	<-neverQuit*/
+	neverQuit := make(chan string)
+	<-neverQuit
 }
 
 func Inter_process_communication(msg_from_network chan string, msg_to_network chan string) {
-	for{
-		select{
+	for {
+		select {
 			case msg :=<- msg_from_network:
 				fmt.Println(msg)
+			case <- msg_to_network:
+				fmt.Println("Hei")
 			case <- time.After(5*time.Second):
 				fmt.Println("Hei")
-			default:
-				time.Sleep(10 * time.Millisecond)
 		}
 	}
 }
@@ -46,7 +46,6 @@ func Read_msg(msg_from_network chan string, localIP net.IP) {
 	Check_error(err_conv_ip_listen)
 	listener, err_listen := net.ListenUDP("udp", laddr)
 	Check_error(err_listen)
-
 	for {
 		b := make([]byte, 1024)
 		_, raddr, _ := listener.ReadFromUDP(b)
