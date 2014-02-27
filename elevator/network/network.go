@@ -5,17 +5,18 @@ import (
 	"net"
 	"strings"
 	"time"
+	driver "../driver"
 )
 
-type Client struct {
-	All_ips map[string]time.Time
-	//State State_t
-	//Order Order_t
-}
-
 func Network() {
+	var order_ext = [2][4]bool{
+	    {false, false, false, false},
+	    {false, false, false, false},
+	}
 	msg_from_network := make(chan string)
 	msg_to_network := make(chan string)
+	order_to_network := make(chan driver.Client)
+	order_from_network := make(chan driver.Client)
 	all_ips_m := make(map[string]time.Time)
 	localIP, _ := LocalIP()
 	fmt.Println(localIP)
@@ -24,8 +25,21 @@ func Network() {
 	go Read_alive(all_ips_m, localIP)
 	go Send_alive()
 	go Inter_process_communication(msg_from_network,msg_to_network)
+	Init_hardware(order_to_network, order_from_network)
+	
 	neverQuit := make(chan string)
 	<-neverQuit
+}
+
+func Init_hardware(order_to_network chan driver.Client, order_from_network chan driver.Client) {
+	if driver.Elev_init() == 0 {
+		fmt.Println("Unable to initialize elevator hardware\n")
+	}
+
+	fmt.Println("Press STOP button to stop elevator and exit program.\n")
+	go driver.Elevator_statemachine()
+	go driver.OrderLogic_search_for_orders(order_to_network)
+	go driver.OrderLogic_set_order(order_to_network, order_from_network)
 }
 
 func Inter_process_communication(msg_from_network chan string, msg_to_network chan string) {
@@ -87,8 +101,7 @@ func Read_alive(all_ips map[string]time.Time, localIP net.IP) {
 		if raddr.IP.String() != localIP.String() {
 			all_ips[raddr.IP.String()] = time.Now()
 			for key, value := range all_ips {
-				err_dead_conn := alive_receiver.SetReadDeadline(value.Add(3 * time.Second))
-				if err_dead_conn != nil {
+				if time.Now().Sub(value) > 3*time.Second {
 					delete(all_ips, key)
 				}
 			}

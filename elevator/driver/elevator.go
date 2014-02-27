@@ -18,27 +18,19 @@ const (
 )
 
 func Elevator_init(State State_t) State_t {
-	OrderLogic_init()
 	Elevator_clear_all_lights()
 	if Elev_get_floor_sensor_signal() != -1 {
 		State = WAIT
-		OrderLogic_update_previous_order(Elev_get_floor_sensor_signal(), -1)
-		Elev_set_floor_indicator(Previous_order.floor)
+		return State
 	}
 	Elev_set_speed(-300)
 	for {
 		if Elev_get_floor_sensor_signal() != -1 {
 			State = WAIT
-			OrderLogic_update_previous_order(Elev_get_floor_sensor_signal(), -1)
-			Elev_set_floor_indicator(Previous_order.floor)
 			Elev_set_speed(0)
 			break
 		}
 	}
-	order_internal := make(chan Order_c)
-	order_from_network := make(chan Order_c)
-	go OrderLogic_search_for_orders(order_internal)
-	go OrderLogic_set_order(order_internal, order_from_network)
 	return State
 }
 
@@ -67,9 +59,6 @@ func Elevator_statemachine() {
 
 func Elevator_wait() State_t {
 	for {
-		if OrderLogic_get_number_of_orders() > 0 {
-			return RUN
-		}
 		if Elev_get_stop_signal() {
 			return STOPS
 		}
@@ -77,32 +66,12 @@ func Elevator_wait() State_t {
 }
 
 func Elevator_run() State_t {
-	OrderLogic_set_head_order()
-	Elev_set_speed(300 * Head_order.dir)
 	for {
-		floor := Elev_get_floor_sensor_signal()
-		if floor != -1 {
-			OrderLogic_update_previous_order(floor, Head_order.dir)
-			Elev_set_floor_indicator(floor)
-		}
-		if floor == Head_order.floor {
-			Elevator_break(Head_order.dir)
-			return DOOR
-		}
-		if Elev_get_stop_signal() {
-			Elevator_break(Head_order.dir)
-			return STOPS
-		}
-		if Elev_get_obstruction_signal() {
-			Elevator_break(Head_order.dir)
-			return STOP_OBS
-		}
+		//floor := Elev_get_floor_sensor_signal()
 	}
 }
 
 func Elevator_door() State_t {
-	OrderLogic_delete_current_order(Head_order.floor)
-	Elevator_clear_lights_current_floor(Head_order.floor)
 	if Elev_get_floor_sensor_signal() != -1 {
 		Elev_set_door_open_lamp(1)
 	}
@@ -112,29 +81,15 @@ func Elevator_door() State_t {
 			break
 		}
 	}
-	if OrderLogic_get_number_of_orders() > 0 {
-		Elev_set_door_open_lamp(0)
-		return RUN
-	}else {
-		Elev_set_door_open_lamp(0)
-		return WAIT
-	}
+	return WAIT
 }
 
 func Elevator_stop() State_t {
 	fmt.Println("The elevator has stopped!\n1. If you wish to order a new floor, do so, or.\n2. Press Ctrl + c to exit program.\n")
 	Elevator_clear_all_lights()
 	Elev_set_stop_lamp(1)
-	OrderLogic_delete_all_orders()
-	if Elev_get_floor_sensor_signal() != -1 {
-		Elev_set_door_open_lamp(1)
-	}
 	for {
-		if OrderLogic_get_number_of_orders() > 0 {
-			Elev_set_stop_lamp(0)
-			Elev_set_door_open_lamp(0)
-			return RUN
-		}
+		
 	}
 }
 
@@ -172,7 +127,5 @@ func Elevator_clear_all_lights() {
 
 func Elevator_break(direction int) {
 	Elev_set_speed(50 * (-direction))
-	Elev_set_speed(20 * (-direction))
-	Elev_set_speed(10 * (-direction))
 	Elev_set_speed(0)
 }
