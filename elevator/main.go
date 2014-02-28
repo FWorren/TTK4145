@@ -2,9 +2,10 @@ package main
 
 import (
 	network "./network"
-	"fmt"
+	//"fmt"
 )
 
 func main() {
 	network.Network()
+	
 }

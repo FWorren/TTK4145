@@ -20,18 +20,15 @@ const (
 func Elevator_init(State State_t) State_t {
 	Elevator_clear_all_lights()
 	if Elev_get_floor_sensor_signal() != -1 {
-		State = WAIT
-		return State
+		return WAIT
 	}
 	Elev_set_speed(-300)
 	for {
 		if Elev_get_floor_sensor_signal() != -1 {
-			State = WAIT
-			Elev_set_speed(0)
-			break
+			Elevator_break(-1)
+			return WAIT
 		}
 	}
-	return State
 }
 
 func Elevator_statemachine() {
@@ -59,6 +56,7 @@ func Elevator_statemachine() {
 
 func Elevator_wait() State_t {
 	for {
+		time.Sleep(25*time.Millisecond)
 		if Elev_get_stop_signal() {
 			return STOPS
 		}
@@ -77,11 +75,11 @@ func Elevator_door() State_t {
 	}
 	time.Sleep(3 * time.Second)
 	for {
+		time.Sleep(25*time.Millisecond)
 		if !Elev_get_obstruction_signal() {
-			break
+			return WAIT
 		}
 	}
-	return WAIT
 }
 
 func Elevator_stop() State_t {
@@ -95,6 +93,7 @@ func Elevator_stop() State_t {
 
 func Elevator_stop_obstruction() State_t {
 	for {
+		time.Sleep(25*time.Millisecond)
 		if !Elev_get_obstruction_signal() {
 			return RUN
 		}
@@ -126,6 +125,6 @@ func Elevator_clear_all_lights() {
 }
 
 func Elevator_break(direction int) {
-	Elev_set_speed(50 * (-direction))
+	Elev_set_speed(20 * (-direction))
 	Elev_set_speed(0)
 }
