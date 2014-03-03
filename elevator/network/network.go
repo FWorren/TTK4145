@@ -3,7 +3,7 @@ package network
 import (
 	"fmt"
 	"net"
-	"strings"
+	//"strings"
 	"time"
 	driver "../driver"
 )
@@ -44,8 +44,8 @@ func Init_hardware(order_to_network chan driver.Client, order_from_network chan 
 
 	fmt.Println("Press STOP button to stop elevator and exit program.\n")
 	go driver.Elevator_statemachine()
-	
-	go driver.OrderLogic_process_orders(order_to_network, order_from_network, order_internal)
+
+	go driver.OrderHandler_process_orders(order_to_network, order_from_network, order_internal)
 }
 
 func Inter_process_communication(msg_from_network chan string, msg_to_network chan string, order_to_network chan driver.Client,order_from_network chan driver.Client, send_from_network chan driver.Client) {
@@ -69,7 +69,7 @@ func Inter_process_communication(msg_from_network chan string, msg_to_network ch
 	}
 }
 
-func Read_msg(msg_from_network chan string, localIP net.IP) {
+func Read_msg(msg_from_network chan driver.Client, localIP net.IP) {
 	laddr, err_conv_ip_listen := net.ResolveUDPAddr("udp", ":20003")
 	Check_error(err_conv_ip_listen)
 	listener, err_listen := net.ListenUDP("udp", laddr)
@@ -78,7 +78,7 @@ func Read_msg(msg_from_network chan string, localIP net.IP) {
 		b := make([]byte, 1024)
 		_, raddr, _ := listener.ReadFromUDP(b)
 		if raddr.IP.String() != localIP.String() {
-			msg_from_network <- strings.Trim(string(b), "\x00")
+			//msg_from_network <- strings.Trim(string(b), "\x00")
 		}
 	}
 }
