@@ -8,7 +8,7 @@ import (
 	driver "../driver"
 )
 
-var order_ext = [2][4]bool{
+var Order_ext = [2][4]bool{
     {false, false, false, false},
     {false, false, false, false},
 }
@@ -17,7 +17,7 @@ func Network() {
 	msg_from_network := make(chan string)
 	msg_to_network := make(chan string)
 	order_to_network := make(chan driver.Client)
-	order_from_network := make(chan driver.Client)
+	order_from_network := make(chan driver.Client,10)
 	send_from_network := make(chan driver.Client, 10)
 	order_internal := make(chan driver.Client)
 	//all_ips_m := make(map[string]time.Time)
@@ -29,6 +29,7 @@ func Network() {
 	go Read_alive(all_ips_m, localIP)
 	go Send_alive()
 	*/
+
 	go Inter_process_communication(msg_from_network,msg_to_network,order_to_network,order_from_network, send_from_network)
 	Init_hardware(order_to_network, order_from_network, order_internal)
 	
@@ -43,7 +44,7 @@ func Init_hardware(order_to_network chan driver.Client, order_from_network chan 
 
 	fmt.Println("Press STOP button to stop elevator and exit program.\n")
 	go driver.Elevator_statemachine()
-	go driver.OrderLogic_search_for_orders(order_internal)
+	
 	go driver.OrderLogic_process_orders(order_to_network, order_from_network, order_internal)
 }
 
@@ -56,11 +57,11 @@ func Inter_process_communication(msg_from_network chan string, msg_to_network ch
 				fmt.Println("msg_to_network")
 			case msg :=<- order_to_network:
 				fmt.Println("order_to_network")
-				//cost(msg, send_from_network)
+				cost(msg, send_from_network)
 				_ = msg
 			case send_order := <- send_from_network:
 				fmt.Println("order_from_network: ",send_order.Floor+1,"\n")
-				fmt.Println(order_ext, "\n")
+				fmt.Println(Order_ext, "\n")
 				order_from_network <- send_order
 			case <- time.After(5*time.Second):
 				fmt.Println("timeout")
