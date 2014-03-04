@@ -44,7 +44,6 @@ func Init_hardware(order_to_network chan driver.Client, order_from_network chan 
 
 	fmt.Println("Press STOP button to stop elevator and exit program.\n")
 	go driver.Elevator_statemachine()
-
 	go driver.OrderHandler_process_orders(order_to_network, order_from_network, order_internal)
 }
 
@@ -76,7 +75,6 @@ func Read_msg(msg_from_network chan driver.Client, localIP net.IP) {
 	Check_error(err_listen)
 	var msg_decoded driver.Client
 	for {
-		
 		b := make([]byte, 1024)
 		_, raddr, _ := listener.ReadFromUDP(b)
 		if raddr.IP.String() != localIP.String() {
