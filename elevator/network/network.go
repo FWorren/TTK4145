@@ -5,6 +5,7 @@ import (
 	"net"
 	//"strings"
 	"time"
+	"encoding/json"
 	driver "../driver"
 )
 
@@ -29,7 +30,6 @@ func Network() {
 	go Read_alive(all_ips_m, localIP)
 	go Send_alive()
 	*/
-
 	go Inter_process_communication(msg_from_network,msg_to_network,order_to_network,order_from_network, send_from_network)
 	Init_hardware(order_to_network, order_from_network, order_internal)
 	
@@ -74,22 +74,31 @@ func Read_msg(msg_from_network chan driver.Client, localIP net.IP) {
 	Check_error(err_conv_ip_listen)
 	listener, err_listen := net.ListenUDP("udp", laddr)
 	Check_error(err_listen)
+	var msg_decoded driver.Client
 	for {
+		
 		b := make([]byte, 1024)
 		_, raddr, _ := listener.ReadFromUDP(b)
 		if raddr.IP.String() != localIP.String() {
-			//msg_from_network <- strings.Trim(string(b), "\x00")
+			err_decoding := json.Unmarshal(b,&msg_decoded)
+			Check_error(err_decoding)
+			msg_from_network <- msg_decoded
 		}
 	}
 }
 
-func Send_msg(msg_to_network chan string) {
+func Send_msg(msg_to_network chan driver.Client) {
 	baddr, err_conv_ip := net.ResolveUDPAddr("udp", "129.241.187.255:20003")
 	Check_error(err_conv_ip)
 	msg_sender, err_dialudp := net.DialUDP("udp", nil, baddr)
 	Check_error(err_dialudp)
 	for {
-		msg_sender.Write([]byte(<-msg_to_network))
+		select{
+			case <- msg_to_network:
+				msg_encoded,err_encoding := json.Marshal(msg_to_network)
+				Check_error(err_encoding)
+				msg_sender.Write([]byte(msg_encoded))
+		}
 	}
 }
 

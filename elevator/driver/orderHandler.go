@@ -12,6 +12,8 @@ type Client struct {
 	Ip net.IP
 	Floor int
 	Button elev_button_type_t
+	Previous_floor int
+	State int
 }
 
 var Order_list = [3][4]bool{
