@@ -3,7 +3,6 @@ package driver
 import (
 	"fmt"
 	"net"
-	//"encoding/json"
 	"time"
 )
 
@@ -22,17 +21,20 @@ func OrderHandler_search_for_orders(order_internal chan Client) {
 		time.Sleep(25 * time.Millisecond)
 		for i := 0; i < N_FLOORS; i++ {
 			if Elev_get_button_signal(BUTTON_COMMAND, i) == 1 {
-				if !Order_list[2][i] {
-					Order_list[2][i] = true
+				if !new_order.Order_list[2][i] {
+					new_order.Order_list[2][i] = true
+					new_order.Button = BUTTON_COMMAND
+					new_order.Floor = i
 					Elev_set_button_lamp(BUTTON_COMMAND, i, 1)
-					fmt.Println("Command order: ", i+1)
-
+					//fmt.Println("Button of the type ",new_order.Button, "pressed. \n")
+					fmt.Println("Command order to floor:", i+1, "registered.\n")
+					order_internal <- new_order
 				}
 			}
 			if i > 0 {
 				if Elev_get_button_signal(BUTTON_CALL_DOWN, i) == 1 {
-					if !Order_list[1][i] {
-						Order_list[1][i] = true
+					if !new_order.Order_list[1][i] {
+						new_order.Order_list[1][i] = true
 						new_order.Floor = i
 						new_order.Button = BUTTON_CALL_DOWN
 						Elev_set_button_lamp(new_order.Button, new_order.Floor, 1)
@@ -42,8 +44,8 @@ func OrderHandler_search_for_orders(order_internal chan Client) {
 			}
 			if i < N_FLOORS-1 {
 				if Elev_get_button_signal(BUTTON_CALL_UP, i) == 1 {
-					if !Order_list[0][i] {
-						Order_list[0][i] = true
+					if !new_order.Order_list[0][i] {
+						new_order.Order_list[0][i] = true
 						new_order.Floor = i
 						new_order.Button = BUTTON_CALL_UP
 						Elev_set_button_lamp(new_order.Button, new_order.Floor, 1)
@@ -57,7 +59,7 @@ func OrderHandler_search_for_orders(order_internal chan Client) {
 	}
 }
 
-func OrderHandler_process_orders(order_to_network chan Client, order_from_network chan Client, order_internal chan Client) {
+func OrderHandler_process_orders(order_from_network chan Client, order_to_network chan Client, order_internal chan Client) {
 	go OrderHandler_search_for_orders(order_internal)
 	for {
 		time.Sleep(25 * time.Millisecond)

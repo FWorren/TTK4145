@@ -10,53 +10,49 @@ import (
 )
 
 func Network() {
-	msg_from_network := make(chan string)
-	msg_to_network := make(chan string)
-	order_to_network := make(chan driver.Client)
+	msg_from_network := make(chan driver.Client)
+	order_to_network := make(chan driver.Client, 10)
 	order_from_network := make(chan driver.Client, 10)
 	send_from_network := make(chan driver.Client, 10)
 	order_internal := make(chan driver.Client)
 	all_ips_m := make(map[string]time.Time)
 	localIP, _ := LocalIP()
 	fmt.Println(localIP)
-	//go Read_msg(msg_from_network, localIP)
-	//go Send_msg(msg_to_network)
+
+	go Read_msg(msg_from_network, localIP)
+	go Send_msg(order_to_network)
 	go Read_alive(all_ips_m, localIP)
 	go Send_alive()
-	go Inter_process_communication(msg_from_network, msg_to_network, order_to_network, order_from_network, send_from_network)
-	Init_hardware(order_to_network, order_from_network, order_internal)
+	go Inter_process_communication(msg_from_network, order_from_network, send_from_network, localIP)
+	Init_hardware(order_from_network, order_to_network, order_internal)
 
 	neverQuit := make(chan string)
 	<-neverQuit
 }
 
-func Init_hardware(order_to_network chan driver.Client, order_from_network chan driver.Client, order_internal chan driver.Client) {
+func Init_hardware(order_from_network chan driver.Client, order_to_network chan driver.Client, order_internal chan driver.Client) {
 	if driver.Elev_init() == 0 {
 		fmt.Println("Unable to initialize elevator hardware\n")
 	}
-
 	fmt.Println("Press STOP button to stop elevator and exit program.\n")
 	go driver.Elevator_statemachine()
+	var new_client driver.Client
 	driver.Init_orderlist(new_client)
-	go driver.OrderHandler_process_orders(order_to_network, order_from_network, order_internal)
+	go driver.OrderHandler_process_orders(order_from_network, order_to_network, order_internal)
 }
 
-func Inter_process_communication(msg_from_network chan string, msg_to_network chan string, order_to_network chan driver.Client, order_from_network chan driver.Client, send_from_network chan driver.Client) {
+func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, send_from_network chan driver.Client, localIP net.IP) {
 	for {
 		select {
-		case <-msg_from_network:
+		case new_order := <-order_from_network:
 			fmt.Println("msg_from_network")
-		case <-msg_to_network:
-			fmt.Println("msg_to_network")
-		case msg := <-order_to_network:
-			fmt.Println("Network module has recieved an order,")
-			fmt.Println("and it has been sent to cost-function.\n")
-			cost(msg, send_from_network)
-			_ = msg
+			getCost(new_order, send_from_network)
 		case send_order := <-send_from_network:
-			fmt.Println("order_from_network: ", send_order.Floor+1, "\n")
-			order_from_network <- send_order
-		case <-time.After(5 * time.Second):
+			if send_order.Ip.String() == localIP.String() {
+				order_from_network <- send_order
+				fmt.Println("order_from_network: ", send_order.Floor+1, "\n")
+			}
+		case <-time.After(10 * time.Second):
 			fmt.Println("timeout, 10 seconds has passed")
 		}
 	}
@@ -71,23 +67,24 @@ func Read_msg(msg_from_network chan driver.Client, localIP net.IP) {
 	for {
 		b := make([]byte, 1024)
 		_, raddr, _ := listener.ReadFromUDP(b)
-		if raddr.IP.String() != localIP.String() {
+		if raddr.IP.String() == localIP.String() {
 			err_decoding := json.Unmarshal(b, &msg_decoded)
 			Check_error(err_decoding)
+			fmt.Println("decoded msg: ", msg_decoded)
 			msg_from_network <- msg_decoded
 		}
 	}
 }
 
-func Send_msg(msg_to_network chan driver.Client) {
+func Send_msg(order_to_network chan driver.Client) {
 	baddr, err_conv_ip := net.ResolveUDPAddr("udp", "129.241.187.255:20003")
 	Check_error(err_conv_ip)
 	msg_sender, err_dialudp := net.DialUDP("udp", nil, baddr)
 	Check_error(err_dialudp)
 	for {
 		select {
-		case <-msg_to_network:
-			msg_encoded, err_encoding := json.Marshal(msg_to_network)
+		case new_order := <-order_to_network:
+			msg_encoded, err_encoding := json.Marshal(new_order)
 			Check_error(err_encoding)
 			msg_sender.Write([]byte(msg_encoded))
 		}
@@ -117,6 +114,7 @@ func Read_alive(all_ips map[string]time.Time, localIP net.IP) {
 			all_ips[raddr.IP.String()] = time.Now()
 			for key, value := range all_ips {
 				if time.Now().Sub(value) > 3*time.Second {
+					fmt.Println("Deleting IP: ", all_ips, key)
 					delete(all_ips, key)
 				}
 			}
