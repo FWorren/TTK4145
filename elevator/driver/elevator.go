@@ -64,9 +64,25 @@ func Elevator_wait() State_t {
 }
 
 func Elevator_run() State_t {
+	Head_order := orderHandler_set_head_order()
 	for {
 		time.Sleep(25*time.Millisecond)
-		//floor := Elev_get_floor_sensor_signal()
+		floor := Elev_get_floor_sensor_signal()
+		if floor != -1 {
+			Elev_set_floor_indicator(floor)
+		}
+		if floor == Head_order.floor  {
+			Elevator_break(Head_order.dir)
+			return DOOR
+		}
+		if Elev_get_stop_signal() {
+			Elevator_break(Head_order.dir)
+			return STOPS
+		}
+		if Elev_get_obstruction_signal() {
+			Elevator_break(Head_order.dir)
+			return STOP_OBS
+		}
 	}
 }
 

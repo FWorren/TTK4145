@@ -8,6 +8,7 @@ import (
 
 type Client struct {
 	Ip             net.IP
+	Time		   time.Time
 	Floor          int
 	Button         elev_button_type_t
 	Previous_floor int

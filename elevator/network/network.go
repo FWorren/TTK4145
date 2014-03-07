@@ -7,24 +7,23 @@ import (
 	driver "../driver"
 	"encoding/json"
 	"time"
-	"strings"
 )
 
 func Network() {
 	msg_from_network := make(chan driver.Client)
 	order_to_network := make(chan driver.Client, 10)
 	order_from_network := make(chan driver.Client, 10)
-	send_from_network := make(chan driver.Client, 10)
+	order_from_cost := make(chan driver.Client, 10)
 	order_internal := make(chan driver.Client)
 	all_ips_m := make(map[string]time.Time)
+	all_clients_m := make(map[string]driver.Client)
 	localIP, _ := LocalIP()
 	fmt.Println(localIP, "\n")
-
 	go Read_msg(msg_from_network, localIP)
 	go Send_msg(order_to_network)
 	go Read_alive(all_ips_m, localIP)
 	go Send_alive()
-	go Inter_process_communication(msg_from_network, order_from_network, send_from_network, localIP)
+	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, localIP)
 	Init_hardware(order_from_network, order_to_network, order_internal, localIP)
 
 	neverQuit := make(chan string)
@@ -42,13 +41,13 @@ func Init_hardware(order_from_network chan driver.Client, order_to_network chan 
 	go driver.OrderHandler_process_orders(order_from_network, order_to_network, order_internal, localIP)
 }
 
-func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, send_from_network chan driver.Client, localIP net.IP) {
+func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, localIP net.IP) {
 	for {
 		select {
 		case new_order := <-msg_from_network:
 			fmt.Println("msg_from_network: ", new_order.Ip.String())
-			priorityHandler(new_order, send_from_network)
-		case send_order := <-send_from_network:
+			priorityHandler(new_order, order_from_cost)
+		case send_order := <-order_from_cost:
 			if send_order.Ip.String() == localIP.String() {
 				order_from_network <- send_order
 				fmt.Println("order_from_network: ", send_order.Floor+1, "\n")
@@ -99,7 +98,7 @@ func Send_alive() {
 	Check_error(err_dialudp)
 	for {
 		time.Sleep(1000 * time.Millisecond)
-		alive_sender.Write([]byte("Alive?"))
+		alive_sender.Write([]byte("?"))
 	}
 }
 
@@ -109,8 +108,8 @@ func Read_alive(all_ips map[string]time.Time, localIP net.IP) {
 	alive_receiver, err_listen := net.ListenUDP("udp", laddr)
 	Check_error(err_listen)
 	for {
-		time.Sleep(10*time.Millisecond)
-		b := make([]byte, 10)
+		time.Sleep(50*time.Millisecond)
+		b := make([]byte, 0)
 		_, raddr, _ := alive_receiver.ReadFromUDP(b)
 		if raddr.IP.String() != localIP.String() {
 			all_ips[raddr.IP.String()] = time.Now()
@@ -164,9 +163,4 @@ func Print_alive(all_ips map[string]string) {
 	for key, value := range all_ips { // key = IP adress and value = time last seen
 		fmt.Println("IP: ", key, " time: ", value, "\n")
 	}
-}
-
-func get_port(localIP net.IP) string {
-	port := strings.SplitAfter(localIP.String(),".")
-	return port[3]
 }
