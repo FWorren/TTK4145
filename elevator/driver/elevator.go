@@ -65,6 +65,7 @@ func Elevator_wait() State_t {
 
 func Elevator_run() State_t {
 	for {
+		time.Sleep(25*time.Millisecond)
 		//floor := Elev_get_floor_sensor_signal()
 	}
 }

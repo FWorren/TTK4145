@@ -59,13 +59,14 @@ func OrderHandler_search_for_orders(order_internal chan Client) {
 	}
 }
 
-func OrderHandler_process_orders(order_from_network chan Client, order_to_network chan Client, order_internal chan Client) {
+func OrderHandler_process_orders(order_from_network chan Client, order_to_network chan Client, order_internal chan Client, localIP net.IP) {
 	go OrderHandler_search_for_orders(order_internal)
 	for {
 		time.Sleep(25 * time.Millisecond)
 		select {
 		case to_network := <-order_internal:
 			fmt.Println("Sending the order on a channel to the network. \n")
+			to_network.Ip = localIP
 			order_to_network <- to_network
 		case from_network := <-order_from_network:
 			from_network.Order_list[from_network.Button][from_network.Floor] = true

@@ -7,6 +7,7 @@ import (
 	driver "../driver"
 	"encoding/json"
 	"time"
+	"strings"
 )
 
 func Network() {
@@ -17,20 +18,20 @@ func Network() {
 	order_internal := make(chan driver.Client)
 	all_ips_m := make(map[string]time.Time)
 	localIP, _ := LocalIP()
-	fmt.Println(localIP)
+	fmt.Println(localIP, "\n")
 
 	go Read_msg(msg_from_network, localIP)
 	go Send_msg(order_to_network)
 	go Read_alive(all_ips_m, localIP)
 	go Send_alive()
 	go Inter_process_communication(msg_from_network, order_from_network, send_from_network, localIP)
-	Init_hardware(order_from_network, order_to_network, order_internal)
+	Init_hardware(order_from_network, order_to_network, order_internal, localIP)
 
 	neverQuit := make(chan string)
 	<-neverQuit
 }
 
-func Init_hardware(order_from_network chan driver.Client, order_to_network chan driver.Client, order_internal chan driver.Client) {
+func Init_hardware(order_from_network chan driver.Client, order_to_network chan driver.Client, order_internal chan driver.Client, localIP net.IP) {
 	if driver.Elev_init() == 0 {
 		fmt.Println("Unable to initialize elevator hardware\n")
 	}
@@ -38,15 +39,15 @@ func Init_hardware(order_from_network chan driver.Client, order_to_network chan 
 	go driver.Elevator_statemachine()
 	var new_client driver.Client
 	driver.Init_orderlist(new_client)
-	go driver.OrderHandler_process_orders(order_from_network, order_to_network, order_internal)
+	go driver.OrderHandler_process_orders(order_from_network, order_to_network, order_internal, localIP)
 }
 
 func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, send_from_network chan driver.Client, localIP net.IP) {
 	for {
 		select {
-		case new_order := <-order_from_network:
-			fmt.Println("msg_from_network")
-			getCost(new_order, send_from_network)
+		case new_order := <-msg_from_network:
+			fmt.Println("msg_from_network: ", new_order.Ip.String())
+			priorityHandler(new_order, send_from_network)
 		case send_order := <-send_from_network:
 			if send_order.Ip.String() == localIP.String() {
 				order_from_network <- send_order
@@ -65,10 +66,10 @@ func Read_msg(msg_from_network chan driver.Client, localIP net.IP) {
 	Check_error(err_listen)
 	var msg_decoded driver.Client
 	for {
-		b := make([]byte, 1024)
-		_, raddr, _ := listener.ReadFromUDP(b)
-		if raddr.IP.String() == localIP.String() {
-			err_decoding := json.Unmarshal(b, &msg_decoded)
+		b := make([]byte,10)
+		n, raddr, _ := listener.ReadFromUDP(b)
+		if raddr.IP.String() != localIP.String() {
+			err_decoding := json.Unmarshal(b[0:n], &msg_decoded)
 			Check_error(err_decoding)
 			fmt.Println("decoded msg: ", msg_decoded)
 			msg_from_network <- msg_decoded
@@ -86,7 +87,7 @@ func Send_msg(order_to_network chan driver.Client) {
 		case new_order := <-order_to_network:
 			msg_encoded, err_encoding := json.Marshal(new_order)
 			Check_error(err_encoding)
-			msg_sender.Write([]byte(msg_encoded))
+			msg_sender.Write(msg_encoded)
 		}
 	}
 }
@@ -108,25 +109,21 @@ func Read_alive(all_ips map[string]time.Time, localIP net.IP) {
 	alive_receiver, err_listen := net.ListenUDP("udp", laddr)
 	Check_error(err_listen)
 	for {
-		b := make([]byte, 1024)
+		time.Sleep(10*time.Millisecond)
+		b := make([]byte, 10)
 		_, raddr, _ := alive_receiver.ReadFromUDP(b)
 		if raddr.IP.String() != localIP.String() {
 			all_ips[raddr.IP.String()] = time.Now()
-			for key, value := range all_ips {
-				if time.Now().Sub(value) > 3*time.Second {
-					fmt.Println("Deleting IP: ", all_ips, key)
-					delete(all_ips, key)
-				}
-			}
 			fmt.Println("IP: ", raddr.IP.String(), " msg: ", string(b))
 		}
+		CheckForElapsedClients(all_ips)
 	}
 }
 
 func CheckForElapsedClients(all_ips map[string]time.Time) {
 	for key, value := range all_ips {
 		if time.Now().Sub(value) > 3*time.Second {
-			fmt.Println("Deleting IP: ", all_ips, key)
+			fmt.Println("Deleting IP: ", key, " ", value)
 			delete(all_ips, key)
 		}
 	}
@@ -167,4 +164,9 @@ func Print_alive(all_ips map[string]string) {
 	for key, value := range all_ips { // key = IP adress and value = time last seen
 		fmt.Println("IP: ", key, " time: ", value, "\n")
 	}
+}
+
+func get_port(localIP net.IP) string {
+	port := strings.SplitAfter(localIP.String(),".")
+	return port[3]
 }
