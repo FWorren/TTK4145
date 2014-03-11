@@ -19,11 +19,11 @@ func Network() {
 	all_clients_m := make(map[string]driver.Client)
 	localIP, _ := LocalIP()
 	fmt.Println(localIP, "\n")
-	go Read_msg(msg_from_network, localIP)
+	go Read_msg(msg_from_network, localIP, all_clients_m)
 	go Send_msg(order_to_network)
 	go Read_alive(all_ips_m, localIP)
 	go Send_alive()
-	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, localIP)
+	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, localIP, all_clients_m)
 	Init_hardware(order_from_network, order_to_network, order_internal, localIP)
 
 	neverQuit := make(chan string)
@@ -41,12 +41,12 @@ func Init_hardware(order_from_network chan driver.Client, order_to_network chan 
 	go driver.OrderHandler_process_orders(order_from_network, order_to_network, order_internal, localIP)
 }
 
-func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, localIP net.IP) {
+func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, localIP net.IP, all_clients map[string]driver.Client) {
 	for {
 		select {
 		case new_order := <-msg_from_network:
 			fmt.Println("msg_from_network: ", new_order.Ip.String())
-			priorityHandler(new_order, order_from_cost)
+			priorityHandler(new_order, order_from_cost, all_clients)
 		case send_order := <-order_from_cost:
 			if send_order.Ip.String() == localIP.String() {
 				order_from_network <- send_order
@@ -58,19 +58,23 @@ func Inter_process_communication(msg_from_network chan driver.Client, order_from
 	}
 }
 
-func Read_msg(msg_from_network chan driver.Client, localIP net.IP) {
+func Read_msg(msg_from_network chan driver.Client, localIP net.IP, all_clients map[string]driver.Client) {
 	laddr, err_conv_ip_listen := net.ResolveUDPAddr("udp", ":20003")
 	Check_error(err_conv_ip_listen)
 	listener, err_listen := net.ListenUDP("udp", laddr)
 	Check_error(err_listen)
 	var msg_decoded driver.Client
 	for {
-		b := make([]byte,10)
+		b := make([]byte, 1024)
 		n, raddr, _ := listener.ReadFromUDP(b)
 		if raddr.IP.String() != localIP.String() {
 			err_decoding := json.Unmarshal(b[0:n], &msg_decoded)
+			if err_decoding != nil {
+				fmt.Println("error DECODING order \n")
+			}
 			Check_error(err_decoding)
 			fmt.Println("decoded msg: ", msg_decoded)
+			all_clients[msg_decoded.Ip.String()] = msg_decoded
 			msg_from_network <- msg_decoded
 		}
 	}
@@ -85,6 +89,9 @@ func Send_msg(order_to_network chan driver.Client) {
 		select {
 		case new_order := <-order_to_network:
 			msg_encoded, err_encoding := json.Marshal(new_order)
+			if err_encoding != nil {
+				fmt.Println("error encoding json \n")
+			}
 			Check_error(err_encoding)
 			msg_sender.Write(msg_encoded)
 		}
@@ -108,7 +115,7 @@ func Read_alive(all_ips map[string]time.Time, localIP net.IP) {
 	alive_receiver, err_listen := net.ListenUDP("udp", laddr)
 	Check_error(err_listen)
 	for {
-		time.Sleep(50*time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 		b := make([]byte, 0)
 		_, raddr, _ := alive_receiver.ReadFromUDP(b)
 		if raddr.IP.String() != localIP.String() {

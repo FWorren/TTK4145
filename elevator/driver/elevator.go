@@ -32,31 +32,44 @@ func Elevator_init(State State_t) State_t {
 }
 
 func Elevator_statemachine() {
+	switch State {
+	case RUN:
+		State = Elevator_run()
+	case WAIT:
+		State = Elevator_wait()
+	case DOOR:
+		State = Elevator_door()
+	case STOPS:
+		State = Elevator_stop()
+	case STOP_OBS:
+		State = Elevator_stop_obstruction()
+	case UNDEF:
+		State = Elevator_init(State)
+	case EXIT:
+		return
+	}
+}
+
+func Elevator_eventhandler() {
 	var State State_t
 	State = UNDEF
+	floor_reached := make(chan int)
+	order := make(chan int)
+	obstruction := make(chan int)
+	stop := make(chan int)
 	for {
-		switch State {
-			case RUN:
-				State = Elevator_run()
-			case WAIT:
-				State = Elevator_wait()
-			case DOOR:
-				State = Elevator_door()
-			case STOPS:
-				State = Elevator_stop()
-			case STOP_OBS:
-				State = Elevator_stop_obstruction()
-			case UNDEF:
-				State = Elevator_init(State)
-			case EXIT:
-				return
+		select {
+		case <-floor_reached:
+		case <-order:
+		case <-obstruction:
+		case <-stop:
 		}
 	}
 }
 
 func Elevator_wait() State_t {
 	for {
-		time.Sleep(25*time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 		if Elev_get_stop_signal() {
 			return STOPS
 		}
@@ -64,14 +77,14 @@ func Elevator_wait() State_t {
 }
 
 func Elevator_run() State_t {
-	Head_order := orderHandler_set_head_order()
+	//Head_order := orderHandler_set_head_order()
 	for {
-		time.Sleep(25*time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 		floor := Elev_get_floor_sensor_signal()
 		if floor != -1 {
 			Elev_set_floor_indicator(floor)
 		}
-		if floor == Head_order.floor  {
+		/*if floor == Head_order.floor  {
 			Elevator_break(Head_order.dir)
 			return DOOR
 		}
@@ -82,7 +95,7 @@ func Elevator_run() State_t {
 		if Elev_get_obstruction_signal() {
 			Elevator_break(Head_order.dir)
 			return STOP_OBS
-		}
+		}*/
 	}
 }
 
@@ -92,7 +105,7 @@ func Elevator_door() State_t {
 	}
 	time.Sleep(3 * time.Second)
 	for {
-		time.Sleep(25*time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 		if !Elev_get_obstruction_signal() {
 			return WAIT
 		}
@@ -104,13 +117,13 @@ func Elevator_stop() State_t {
 	Elevator_clear_all_lights()
 	Elev_set_stop_lamp(1)
 	for {
-		
+
 	}
 }
 
 func Elevator_stop_obstruction() State_t {
 	for {
-		time.Sleep(25*time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 		if !Elev_get_obstruction_signal() {
 			return RUN
 		}

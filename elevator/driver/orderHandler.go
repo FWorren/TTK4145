@@ -8,12 +8,15 @@ import (
 
 type Client struct {
 	Ip             net.IP
-	Time		   time.Time
+	Ip_from_cost   net.IP
 	Floor          int
+	Direction      int
 	Button         elev_button_type_t
+	Current_floor  int
 	Previous_floor int
 	State          int
 	Order_list     [3][4]bool
+	Cost           int
 }
 
 func OrderHandler_search_for_orders(order_internal chan Client) {
