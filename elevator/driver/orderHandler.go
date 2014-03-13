@@ -65,11 +65,12 @@ func OrderHandler_search_for_orders(order_internal chan Client) {
 }
 
 func OrderHandler_process_orders(order_from_network chan Client, order_to_network chan Client, order_internal chan Client, localIP net.IP) {
+	order_internal := make(chan Client)
 	head_order_c := make(chan Order)
 	prev_order_c := make(chan Order)
 	var Head_order Order
 	var Prev_order Order
-	go Elevator_eventHandler(head_order_c,prev_order_c)
+	go Elevator_eventHandler(head_order_c, prev_order_c)
 	go OrderHandler_search_for_orders(order_internal)
 	for {
 		time.Sleep(25 * time.Millisecond)

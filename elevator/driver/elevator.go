@@ -21,7 +21,6 @@ func Elevator_eventHandler(head_order_c chan Order, prev_order_c chan Order) {
 	floor_reached := make(chan bool)
 	obstruction := make(chan bool)
 	stop := make(chan bool)
-	Elevator_init()
 	for {
 		select {
 		case <-floor_reached:
@@ -40,22 +39,7 @@ func Elevator_eventHandler(head_order_c chan Order, prev_order_c chan Order) {
 	}
 }
 
-/*func Elevator_statemachine(state State_t, floor_reached chan bool, head_order_c chan Order, obstruction chan bool, stop chan bool, prev_order_c chan Order) {
-	switch state {
-	case RUN:
-		Elevator_run(floor_reached, head_order_c, obstruction, stop, prev_order_c)
-	case DOOR:
-		Elevator_door()
-	case STOPS:
-		Elevator_stop()
-	case STOP_OBS:
-		Elevator_stop_obstruction()
-	case UNDEF:
-		prev_order_c <- Elevator_init(floor_reached)
-	}
-}*/
-
-func Elevator_init() {
+func Elevator_init() (init bool, Order) {
 	Elevator_clear_all_lights()
 	Elev_set_speed(-300)
 	for {
@@ -64,13 +48,13 @@ func Elevator_init() {
 		fmt.Println(floor)
 		if floor != -1 {
 			Elevator_break(-1)
-			/*var current Order
+			set := true
+			var current Order
 			current.Floor = floor
-			current.Dir = -1*/
-			break
+			current.Dir = -1
+			return set, current
 		}
 	}
-	fmt.Println("init complete ")
 }
 
 func Elevator_run(floor_reached chan bool, head_order Order, obstruction chan bool, stop chan bool, prev_order chan Order) {

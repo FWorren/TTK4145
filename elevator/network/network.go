@@ -14,9 +14,9 @@ func Network() {
 	order_to_network := make(chan driver.Client, 10)
 	order_from_network := make(chan driver.Client, 10)
 	order_from_cost := make(chan driver.Client, 10)
-	order_internal := make(chan driver.Client)
 	all_ips_m := make(map[string]time.Time)
 	all_clients_m := make(map[string]driver.Client)
+	var new_client driver.Client
 	localIP, _ := LocalIP()
 	fmt.Println(localIP, "\n")
 	go Read_msg(msg_from_network, localIP, all_clients_m)
@@ -24,21 +24,26 @@ func Network() {
 	go Read_alive(all_ips_m, localIP)
 	go Send_alive()
 	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, localIP, all_clients_m)
-	Init_hardware(order_from_network, order_to_network, order_internal, localIP)
+	init, current_floor := Init_hardware(order_from_network, order_to_network, new_client driver.Client, localIP)
+	if init {
+		go driver.OrderHandler_process_orders(order_from_network, order_to_network, order_internal, current_floor, localIP)	
+	}
 
 	neverQuit := make(chan string)
 	<-neverQuit
 }
 
-func Init_hardware(order_from_network chan driver.Client, order_to_network chan driver.Client, order_internal chan driver.Client, localIP net.IP) {
+func Init_hardware() (set bool, Order) {
 	if driver.Elev_init() == 0 {
 		fmt.Println("Unable to initialize elevator hardware\n")
 	}
 	fmt.Println("Press STOP button to stop elevator and exit program.\n")
-	var new_client driver.Client
-	//driver.Elevator_init()
+	init,current_floor := driver.Elevator_init()
+	if !init {
+		fmt.Println("Unable to initialize elevator to floor\n")
+	}
 	driver.Init_orderlist(new_client)
-	go driver.OrderHandler_process_orders(order_from_network, order_to_network, order_internal, localIP)
+	return init, current_floor
 }
 
 func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, localIP net.IP, all_clients map[string]driver.Client) {
