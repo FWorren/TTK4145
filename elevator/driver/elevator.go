@@ -16,25 +16,23 @@ const (
 )
 
 func Elevator_eventHandler(head_order_c chan Order, prev_order_c chan Order) {
-	//var State State_t
-	//State = UNDEF
 	floor_reached := make(chan bool)
 	obstruction := make(chan bool)
 	stop := make(chan bool)
+	get_prev_floor := make(chan Order)
 	for {
+		time.Sleep(10 * time.Millisecond)
 		select {
-		case <-floor_reached:
-			//State = DOOR
-			Elevator_door()
-		case new_order := <-head_order_c:
-			//State = RUN
-			Elevator_run(floor_reached, new_order, obstruction, stop, prev_order_c)
-		case <-obstruction:
-			//State = STOP_OBS
-			Elevator_stop_obstruction()
-		case <-stop:
-			//State = STOPS
-			Elevator_stop()
+			case <-floor_reached:
+				Elevator_door()	
+			case new_order := <-head_order_c:
+				Elevator_run(floor_reached, new_order, obstruction, stop, prev_order_c)
+			case <-obstruction:
+				Elevator_stop_obstruction()	
+			case <-stop:
+				Elevator_stop()
+			case update_prev := <-get_prev_floor:
+				prev_order_c <- update_prev
 		}
 	}
 }
@@ -57,7 +55,7 @@ func Elevator_init() (init bool, Order) {
 	}
 }
 
-func Elevator_run(floor_reached chan bool, head_order Order, obstruction chan bool, stop chan bool, prev_order chan Order) {
+func Elevator_run(floor_reached chan bool, head_order Order, obstruction chan bool, stop chan bool, get_prev_floor chan Order) {
 	Elev_set_speed(300 * head_order.Dir)
 	for {
 		time.Sleep(25 * time.Millisecond)
@@ -66,7 +64,7 @@ func Elevator_run(floor_reached chan bool, head_order Order, obstruction chan bo
 			var current Order
 			current.Floor = current_floor
 			current.Dir = head_order.Dir
-			prev_order <- current
+			get_prev_floor <- current
 			Elev_set_floor_indicator(current_floor)
 		}
 		if current_floor == head_order.Floor {
@@ -94,7 +92,7 @@ func Elevator_door() {
 		for {
 			time.Sleep(25 * time.Millisecond)
 			if !Elev_get_obstruction_signal() {
-				return
+				break
 			}
 		}
 		Elev_set_door_open_lamp(0)

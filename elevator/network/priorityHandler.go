@@ -56,10 +56,7 @@ func priorityHandler_sort_all_ips(all_clients map[string]driver.Client) net.IP {
 		cost = append(cost, i)
 		counter++
 	}
-	//fmt.Println("Counter = ", counter)
 	sort.Ints(cost)
-
-	//fmt.Println(cost_m[cost[0]], "\n")
 	return cost_m[cost[0]]
 }
 

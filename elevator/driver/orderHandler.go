@@ -24,6 +24,33 @@ type Order struct {
 	Dir   int
 }
 
+func OrderHandler_process_orders(order_from_network chan Client, order_to_network chan Client, localIP net.IP) {
+	order_internal := make(chan Client)
+	head_order_c := make(chan Order)
+	prev_order_c := make(chan Order)
+	var Head_order Order
+	var Prev_order Order
+	go Elevator_eventHandler(head_order_c, prev_order_c)
+	go OrderHandler_search_for_orders(order_internal)
+	for {
+		time.Sleep(25 * time.Millisecond)
+		select {
+			case to_network := <-order_internal:
+				fmt.Println("Sending the order on a channel to the network. \n")
+				to_network.Ip = localIP
+				to_network.Current_floor = Prev_order.Floor
+				order_to_network <- to_network
+			case from_network := <-order_from_network:
+				fmt.Println("got order , setting head")
+				Head_order = OrderHandler_set_head_order(from_network, Head_order, Prev_order)
+				head_order_c <- Head_order
+				fmt.Println("from network: ", from_network.Floor+1, "\n")
+			case Update_prev := <- prev_order_c:
+				Prev_order = Update_prev
+		}
+	}
+}
+
 func OrderHandler_search_for_orders(order_internal chan Client) {
 	var new_order Client
 	for {
@@ -35,8 +62,6 @@ func OrderHandler_search_for_orders(order_internal chan Client) {
 					new_order.Button = BUTTON_COMMAND
 					new_order.Floor = i
 					Elev_set_button_lamp(BUTTON_COMMAND, i, 1)
-					//fmt.Println("Button of the type ",new_order.Button, "pressed. \n")
-					fmt.Println("Command order to floor:", i+1, "registered.\n")
 					order_internal <- new_order
 				}
 			}
@@ -45,7 +70,6 @@ func OrderHandler_search_for_orders(order_internal chan Client) {
 					if !new_order.Order_list[1][i] {
 						new_order.Floor = i
 						new_order.Button = BUTTON_CALL_DOWN
-						Elev_set_button_lamp(new_order.Button, new_order.Floor, 1)
 						order_internal <- new_order
 					}
 				}
@@ -55,7 +79,6 @@ func OrderHandler_search_for_orders(order_internal chan Client) {
 					if !new_order.Order_list[0][i] {
 						new_order.Floor = i
 						new_order.Button = BUTTON_CALL_UP
-						Elev_set_button_lamp(new_order.Button, new_order.Floor, 1)
 						order_internal <- new_order
 					}
 				}
@@ -64,32 +87,6 @@ func OrderHandler_search_for_orders(order_internal chan Client) {
 	}
 }
 
-func OrderHandler_process_orders(order_from_network chan Client, order_to_network chan Client, order_internal chan Client, localIP net.IP) {
-	order_internal := make(chan Client)
-	head_order_c := make(chan Order)
-	prev_order_c := make(chan Order)
-	var Head_order Order
-	var Prev_order Order
-	go Elevator_eventHandler(head_order_c, prev_order_c)
-	go OrderHandler_search_for_orders(order_internal)
-	for {
-		time.Sleep(25 * time.Millisecond)
-		select {
-		case to_network := <-order_internal:
-			fmt.Println("Sending the order on a channel to the network. \n")
-			to_network.Ip = localIP
-			ifconfi.Current_floor = Prev_order.Floor
-			order_to_network <- to_network
-		case from_network := <-order_from_network:
-			fmt.Println("got order , setting head")
-			Head_order = OrderHandler_set_head_order(from_network, Head_order, Prev_order)
-			head_order_c <- Head_order
-			fmt.Println("from network: ", from_network.Floor+1, "\n")
-		case Update_prev := <- prev_order_c:
-			Prev_order = Update_prev
-		}
-	}
-}
 
 func Init_orderlist(client Client) {
 	for i := 0; i < 3; i++ {

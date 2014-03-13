@@ -14,36 +14,42 @@ func Network() {
 	order_to_network := make(chan driver.Client, 10)
 	order_from_network := make(chan driver.Client, 10)
 	order_from_cost := make(chan driver.Client, 10)
+
 	all_ips_m := make(map[string]time.Time)
 	all_clients_m := make(map[string]driver.Client)
+
 	var new_client driver.Client
 	localIP, _ := LocalIP()
 	fmt.Println(localIP, "\n")
+
 	go Read_msg(msg_from_network, localIP, all_clients_m)
 	go Send_msg(order_to_network)
 	go Read_alive(all_ips_m, localIP)
 	go Send_alive()
 	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, localIP, all_clients_m)
-	init, current_floor := Init_hardware(order_from_network, order_to_network, new_client driver.Client, localIP)
-	if init {
-		go driver.OrderHandler_process_orders(order_from_network, order_to_network, order_internal, current_floor, localIP)	
+	
+	init_elevator, init_hardware, current_floor := driver.Initialize_elevator(new_client)
+	if init_elevator && init_hardware {
+		go driver.OrderHandler_process_orders(order_from_network, order_to_network, current_floor, localIP)	
 	}
 
 	neverQuit := make(chan string)
 	<-neverQuit
 }
 
-func Init_hardware() (set bool, Order) {
+func Initialize_elevator(new_client driver.Client) (init_elevator, init_hardware bool, Order) {
+	init_hardware := true
 	if driver.Elev_init() == 0 {
+		init_hardware = false
 		fmt.Println("Unable to initialize elevator hardware\n")
 	}
 	fmt.Println("Press STOP button to stop elevator and exit program.\n")
-	init,current_floor := driver.Elevator_init()
-	if !init {
+	init_elevator,current_floor := driver.Elevator_init()
+	if !init_elevator {
 		fmt.Println("Unable to initialize elevator to floor\n")
 	}
 	driver.Init_orderlist(new_client)
-	return init, current_floor
+	return init_elevator, init_hardware, current_floor
 }
 
 func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, localIP net.IP, all_clients map[string]driver.Client) {
@@ -90,13 +96,13 @@ func Send_msg(order_to_network chan driver.Client) {
 	Check_error(err_dialudp)
 	for {
 		select {
-		case new_order := <-order_to_network:
-			msg_encoded, err_encoding := json.Marshal(new_order)
-			if err_encoding != nil {
-				fmt.Println("error encoding json \n")
-			}
-			Check_error(err_encoding)
-			msg_sender.Write(msg_encoded)
+			case new_order := <-order_to_network:
+				msg_encoded, err_encoding := json.Marshal(new_order)
+				if err_encoding != nil {
+					fmt.Println("error encoding json \n")
+				}
+				Check_error(err_encoding)
+				msg_sender.Write(msg_encoded)
 		}
 	}
 }
