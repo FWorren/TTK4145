@@ -55,18 +55,18 @@ func Initialize_elevator(new_client driver.Client) (init_elevator, init_hardware
 func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, localIP net.IP, all_clients map[string]driver.Client) {
 	for {
 		select {
-		case new_order := <-msg_from_network:
-			fmt.Println("msg_from_network: ", new_order.Ip.String())
-			driver.Elev_set_button_lamp(new_order.Button, new_order.Floor, 1)
-			all_clients[new_order.Ip.String()] = new_order
-			priorityHandler(new_order, order_from_cost, all_clients)
-		case send_order := <-order_from_cost:
-			if send_order.Ip_from_cost.String() == localIP.String() {
-				order_from_network <- send_order
-				fmt.Println("order_from_network: ", send_order.Floor+1, "\n")
-			}
-		case <-time.After(10 * time.Second):
-			fmt.Println("timeout, 10 seconds has passed")
+			case new_order := <-msg_from_network:
+				fmt.Println("msg_from_network: ", new_order.Ip.String())
+				driver.Elev_set_button_lamp(new_order.Button, new_order.Floor, 1)
+				all_clients[new_order.Ip.String()] = new_order
+				priorityHandler(new_order, order_from_cost, all_clients)
+			case send_order := <-order_from_cost:
+				if send_order.Ip_from_cost.String() == localIP.String() {
+					order_from_network <- send_order
+					fmt.Println("order_from_network: ", send_order.Floor+1, "\n")
+				}
+			case <-time.After(10 * time.Second):
+				fmt.Println("timeout, 10 seconds has passed")
 		}
 	}
 }
