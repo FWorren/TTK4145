@@ -35,8 +35,8 @@ func Init_hardware(order_from_network chan driver.Client, order_to_network chan 
 		fmt.Println("Unable to initialize elevator hardware\n")
 	}
 	fmt.Println("Press STOP button to stop elevator and exit program.\n")
-	go driver.Elevator_statemachine()
 	var new_client driver.Client
+	//driver.Elevator_init()
 	driver.Init_orderlist(new_client)
 	go driver.OrderHandler_process_orders(order_from_network, order_to_network, order_internal, localIP)
 }
@@ -46,9 +46,11 @@ func Inter_process_communication(msg_from_network chan driver.Client, order_from
 		select {
 		case new_order := <-msg_from_network:
 			fmt.Println("msg_from_network: ", new_order.Ip.String())
+			driver.Elev_set_button_lamp(new_order.Button, new_order.Floor, 1)
+			all_clients[new_order.Ip.String()] = new_order
 			priorityHandler(new_order, order_from_cost, all_clients)
 		case send_order := <-order_from_cost:
-			if send_order.Ip.String() == localIP.String() {
+			if send_order.Ip_from_cost.String() == localIP.String() {
 				order_from_network <- send_order
 				fmt.Println("order_from_network: ", send_order.Floor+1, "\n")
 			}
@@ -66,17 +68,13 @@ func Read_msg(msg_from_network chan driver.Client, localIP net.IP, all_clients m
 	var msg_decoded driver.Client
 	for {
 		b := make([]byte, 1024)
-		n, raddr, _ := listener.ReadFromUDP(b)
-		if raddr.IP.String() != localIP.String() {
-			err_decoding := json.Unmarshal(b[0:n], &msg_decoded)
-			if err_decoding != nil {
-				fmt.Println("error DECODING order \n")
-			}
-			Check_error(err_decoding)
-			fmt.Println("decoded msg: ", msg_decoded)
-			all_clients[msg_decoded.Ip.String()] = msg_decoded
-			msg_from_network <- msg_decoded
+		n, _, _ := listener.ReadFromUDP(b)
+		err_decoding := json.Unmarshal(b[0:n], &msg_decoded)
+		if err_decoding != nil {
+			fmt.Println("error DECODING order \n")
 		}
+		Check_error(err_decoding)
+		msg_from_network <- msg_decoded
 	}
 }
 
