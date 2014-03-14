@@ -10,41 +10,50 @@ type State_t int
 const (
 	RUN State_t = iota
 	DOOR
+	WAIT
 	STOPS
 	STOP_OBS
 	UNDEF
 )
 
-func Elevator_eventHandler(head_order_c chan Order, prev_order_c chan Order) {
+func Elevator_eventHandler(head_order_c chan Order, prev_order_c chan Order, del_order chan Order, state_c chan State_t) {
 	floor_reached := make(chan bool)
 	obstruction := make(chan bool)
 	stop := make(chan bool)
 	get_prev_floor := make(chan Order)
+	delete_order := make(chan Order)
+	state := make(chan State_t)
+	var head_order Order
+	state_c <- WAIT
 	for {
 		time.Sleep(10 * time.Millisecond)
 		select {
+			case head_order =<-head_order_c:
+				go Elevator_run(floor_reached, head_order, obstruction, stop, prev_order_c, state)
 			case <-floor_reached:
-				Elevator_door()	
-			case new_order := <-head_order_c:
-				Elevator_run(floor_reached, new_order, obstruction, stop, prev_order_c)
+				go Elevator_door(head_order, delete_order, state)		
 			case <-obstruction:
-				Elevator_stop_obstruction()	
+				go Elevator_stop_obstruction()	
 			case <-stop:
-				Elevator_stop()
+				go Elevator_stop()
 			case update_prev := <-get_prev_floor:
 				prev_order_c <- update_prev
+			case del_req :=<- delete_order:
+				del_order <- del_req
+			case new_state := <- state:
+				state_c <- new_state
 		}
 	}
 }
 
-func Elevator_init() (init bool, Order) {
+func Elevator_init() (init bool, prev Order) {
 	Elevator_clear_all_lights()
 	Elev_set_speed(-300)
 	for {
 		time.Sleep(10 * time.Millisecond)
 		floor := Elev_get_floor_sensor_signal()
-		fmt.Println(floor)
 		if floor != -1 {
+			Elev_set_floor_indicator(floor)
 			Elevator_break(-1)
 			set := true
 			var current Order
@@ -55,10 +64,11 @@ func Elevator_init() (init bool, Order) {
 	}
 }
 
-func Elevator_run(floor_reached chan bool, head_order Order, obstruction chan bool, stop chan bool, get_prev_floor chan Order) {
+func Elevator_run(floor_reached chan bool, head_order Order, obstruction chan bool, stop chan bool, get_prev_floor chan Order, state chan State_t) {
 	Elev_set_speed(300 * head_order.Dir)
+	state <- RUN
 	for {
-		time.Sleep(25 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		current_floor := Elev_get_floor_sensor_signal()
 		if current_floor != -1 {
 			var current Order
@@ -70,24 +80,25 @@ func Elevator_run(floor_reached chan bool, head_order Order, obstruction chan bo
 		if current_floor == head_order.Floor {
 			Elevator_break(head_order.Dir)
 			floor_reached <- true
-			break
+			return
 		}
 		if Elev_get_stop_signal() {
 			Elevator_break(head_order.Dir)
 			stop <- true
-			break
+			return
 		}
 		if Elev_get_obstruction_signal() {
 			Elevator_break(head_order.Dir)
 			obstruction <- true
-			break
+			return
 		}
 	}
 }
 
-func Elevator_door() {
+func Elevator_door(head_order Order, delete_order chan Order, state chan State_t) {
 	if Elev_get_floor_sensor_signal() != -1 {
 		Elev_set_door_open_lamp(1)
+		state <- DOOR
 		time.Sleep(3 * time.Second)
 		for {
 			time.Sleep(25 * time.Millisecond)
@@ -95,7 +106,10 @@ func Elevator_door() {
 				break
 			}
 		}
+		state <- WAIT
 		Elev_set_door_open_lamp(0)
+		Elevator_clear_lights_current_floor(head_order.Floor)
+		delete_order <- head_order
 	} else {
 
 	}
@@ -144,7 +158,7 @@ func Elevator_clear_all_lights() {
 }
 
 func Elevator_break(direction int) {
-	Elev_set_speed(20 * (-direction))
-	//time.Sleep(10 * time.Millisecond)
+	Elev_set_speed(100 * (-direction))
+	time.Sleep(10 * time.Millisecond)
 	Elev_set_speed(0)
 }

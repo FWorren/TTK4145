@@ -10,15 +10,14 @@ import (
 )
 
 func Network() {
+	all_ips_m := make(map[string]time.Time)
+	all_clients_m := make(map[string]driver.Client)
+
 	msg_from_network := make(chan driver.Client)
 	order_to_network := make(chan driver.Client, 10)
 	order_from_network := make(chan driver.Client, 10)
 	order_from_cost := make(chan driver.Client, 10)
 
-	all_ips_m := make(map[string]time.Time)
-	all_clients_m := make(map[string]driver.Client)
-
-	var new_client driver.Client
 	localIP, _ := LocalIP()
 	fmt.Println(localIP, "\n")
 
@@ -28,7 +27,7 @@ func Network() {
 	go Send_alive()
 	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, localIP, all_clients_m)
 	
-	init_elevator, init_hardware, current_floor := driver.Initialize_elevator(new_client)
+	init_elevator, init_hardware, current_floor := Initialize_elevator()
 	if init_elevator && init_hardware {
 		go driver.OrderHandler_process_orders(order_from_network, order_to_network, current_floor, localIP)	
 	}
@@ -37,8 +36,8 @@ func Network() {
 	<-neverQuit
 }
 
-func Initialize_elevator(new_client driver.Client) (init_elevator, init_hardware bool, Order) {
-	init_hardware := true
+func Initialize_elevator() (init_elevator, init_hardware bool, prev driver.Order) {
+	init_hardware = true
 	if driver.Elev_init() == 0 {
 		init_hardware = false
 		fmt.Println("Unable to initialize elevator hardware\n")
@@ -48,7 +47,6 @@ func Initialize_elevator(new_client driver.Client) (init_elevator, init_hardware
 	if !init_elevator {
 		fmt.Println("Unable to initialize elevator to floor\n")
 	}
-	driver.Init_orderlist(new_client)
 	return init_elevator, init_hardware, current_floor
 }
 
@@ -138,7 +136,7 @@ func Read_alive(all_ips map[string]time.Time, localIP net.IP) {
 func CheckForElapsedClients(all_ips map[string]time.Time) {
 	for key, value := range all_ips {
 		if time.Now().Sub(value) > 3*time.Second {
-			fmt.Println("Deleting IP: ", key, " ", value)
+			fmt.Println("Deleting IP: ", &key, " ", value)
 			delete(all_ips, key)
 		}
 	}
