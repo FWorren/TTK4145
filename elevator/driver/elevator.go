@@ -25,23 +25,24 @@ func Elevator_eventHandler(head_order_c chan Order, prev_order_c chan Order, del
 	state := make(chan State_t)
 	var head_order Order
 	state_c <- WAIT
+
 	for {
 		time.Sleep(10 * time.Millisecond)
 		select {
-			case head_order =<-head_order_c:
-				go Elevator_run(floor_reached, head_order, obstruction, stop, prev_order_c, state)
-			case <-floor_reached:
-				go Elevator_door(head_order, delete_order, state)		
-			case <-obstruction:
-				go Elevator_stop_obstruction()	
-			case <-stop:
-				go Elevator_stop()
-			case update_prev := <-get_prev_floor:
-				prev_order_c <- update_prev
-			case del_req :=<- delete_order:
-				del_order <- del_req
-			case new_state := <- state:
-				state_c <- new_state
+		case head_order = <-head_order_c:
+			go Elevator_run(floor_reached, head_order, obstruction, stop, prev_order_c, state)
+		case <-floor_reached:
+			go Elevator_door(head_order, delete_order, state)
+		case <-obstruction:
+			go Elevator_stop_obstruction()
+		case <-stop:
+			go Elevator_stop()
+		case update_prev := <-get_prev_floor:
+			prev_order_c <- update_prev
+		case del_req := <-delete_order:
+			del_order <- del_req
+		case new_state := <-state:
+			state_c <- new_state
 		}
 	}
 }
@@ -78,6 +79,7 @@ func Elevator_run(floor_reached chan bool, head_order Order, obstruction chan bo
 			Elev_set_floor_indicator(current_floor)
 		}
 		if current_floor == head_order.Floor {
+			fmt.Println("FLOOR REEEEEACHED")
 			Elevator_break(head_order.Dir)
 			floor_reached <- true
 			return
@@ -159,6 +161,6 @@ func Elevator_clear_all_lights() {
 
 func Elevator_break(direction int) {
 	Elev_set_speed(100 * (-direction))
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 	Elev_set_speed(0)
 }

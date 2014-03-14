@@ -26,10 +26,10 @@ func Network() {
 	go Read_alive(all_ips_m, localIP)
 	go Send_alive()
 	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, localIP, all_clients_m)
-	
+
 	init_elevator, init_hardware, current_floor := Initialize_elevator()
 	if init_elevator && init_hardware {
-		go driver.OrderHandler_process_orders(order_from_network, order_to_network, current_floor, localIP)	
+		go driver.OrderHandler_process_orders(order_from_network, order_to_network, current_floor, localIP)
 	}
 
 	neverQuit := make(chan string)
@@ -43,7 +43,7 @@ func Initialize_elevator() (init_elevator, init_hardware bool, prev driver.Order
 		fmt.Println("Unable to initialize elevator hardware\n")
 	}
 	fmt.Println("Press STOP button to stop elevator and exit program.\n")
-	init_elevator,current_floor := driver.Elevator_init()
+	init_elevator, current_floor := driver.Elevator_init()
 	if !init_elevator {
 		fmt.Println("Unable to initialize elevator to floor\n")
 	}
@@ -53,18 +53,18 @@ func Initialize_elevator() (init_elevator, init_hardware bool, prev driver.Order
 func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, localIP net.IP, all_clients map[string]driver.Client) {
 	for {
 		select {
-			case new_order := <-msg_from_network:
-				fmt.Println("msg_from_network: ", new_order.Ip.String())
-				driver.Elev_set_button_lamp(new_order.Button, new_order.Floor, 1)
-				all_clients[new_order.Ip.String()] = new_order
-				priorityHandler(new_order, order_from_cost, all_clients)
-			case send_order := <-order_from_cost:
-				if send_order.Ip_from_cost.String() == localIP.String() {
-					order_from_network <- send_order
-					fmt.Println("order_from_network: ", send_order.Floor+1, "\n")
-				}
-			case <-time.After(10 * time.Second):
-				fmt.Println("timeout, 10 seconds has passed")
+		case new_order := <-msg_from_network:
+			fmt.Println("msg_from_network: ", new_order.Ip.String())
+			driver.Elev_set_button_lamp(new_order.Button, new_order.Floor, 1)
+			all_clients[new_order.Ip.String()] = new_order
+			priorityHandler(new_order, order_from_cost, all_clients)
+		case send_order := <-order_from_cost:
+			if send_order.Ip_from_cost.String() == localIP.String() {
+				order_from_network <- send_order
+				fmt.Println("order_from_network: ", send_order.Floor+1, "\n")
+			}
+		case <-time.After(10 * time.Second):
+			fmt.Println("timeout, 10 seconds has passed")
 		}
 	}
 }
@@ -94,13 +94,13 @@ func Send_msg(order_to_network chan driver.Client) {
 	Check_error(err_dialudp)
 	for {
 		select {
-			case new_order := <-order_to_network:
-				msg_encoded, err_encoding := json.Marshal(new_order)
-				if err_encoding != nil {
-					fmt.Println("error encoding json \n")
-				}
-				Check_error(err_encoding)
-				msg_sender.Write(msg_encoded)
+		case new_order := <-order_to_network:
+			msg_encoded, err_encoding := json.Marshal(new_order)
+			if err_encoding != nil {
+				fmt.Println("error encoding json \n")
+			}
+			Check_error(err_encoding)
+			msg_sender.Write(msg_encoded)
 		}
 	}
 }
@@ -136,7 +136,7 @@ func Read_alive(all_ips map[string]time.Time, localIP net.IP) {
 func CheckForElapsedClients(all_ips map[string]time.Time) {
 	for key, value := range all_ips {
 		if time.Now().Sub(value) > 3*time.Second {
-			fmt.Println("Deleting IP: ", &key, " ", value)
+			fmt.Println("Deleting IP: ", key, " ", value)
 			delete(all_ips, key)
 		}
 	}
