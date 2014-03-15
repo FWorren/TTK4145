@@ -10,36 +10,33 @@ import (
 
 func priorityHandler(external driver.Client, order_from_cost chan driver.Client, all_clients map[string]driver.Client) {
 	fmt.Println("Cost running \n")
-	flag := false
-	/*for _, value := range all_clients {
-		if value.Current_floor == external.Floor {
+	fmt.Println("all clients : ", all_clients)
+	for key, value := range all_clients {
+		/*if value.Current_floor == external.Floor {
 			fmt.Println("er i riktig etg \n")
 			value.Ip_from_cost := localIP
 			order_from_cost <- external
 			flag = true
 			break
-		}
+		}*/
 		value.Cost = priorityHandler_getCost(value, external)
+		all_clients[key] = value
 	}
-	*/
-	if flag {
-		return
-	} else {
-		ip := priorityHandler_sort_all_ips(all_clients)
-		designated_client := all_clients[ip.String()]
-		fmt.Println("Order originated from IP :", designated_client.Ip.String(), "\n")
-		designated_client.Ip_from_cost = ip
-		fmt.Println("The designated client IP :", designated_client.Ip_from_cost.String(), "\n")
-		designated_client.Order_list[external.Button][external.Floor] = true
-		fmt.Println("Orderlist : ", designated_client.Order_list, "\n")
-		order_from_cost <- designated_client
-	}
+	ip := priorityHandler_sort_all_ips(all_clients)
+	fmt.Println("order originated from IP :", external.Ip.String())
+	designated_client := all_clients[ip.String()]
+	designated_client.Floor = external.Floor
+	designated_client.Button = external.Button
+	designated_client.Ip_from_cost = ip
+	fmt.Println("designated client ip :", ip.String())
+	order_from_cost <- designated_client
 	fmt.Println("End of cost function \n")
 }
 
 func priorityHandler_getCost(client driver.Client, external driver.Client) int {
+	cost := 0
 	diff := external.Floor - client.Current_floor
-	cost := abs(diff)
+	cost = abs(diff)
 	direction := client.Direction
 	ordered_direction := 0
 	if diff < 0 {
@@ -71,6 +68,7 @@ func priorityHandler_sort_all_ips(all_clients map[string]driver.Client) net.IP {
 		counter++
 	}
 	sort.Ints(cost)
+	fmt.Println("cost map =", cost_m)
 	return cost_m[cost[0]]
 }
 

@@ -12,18 +12,23 @@ import (
 func Network() {
 	all_ips_m := make(map[string]time.Time)
 	all_clients_m := make(map[string]driver.Client)
+	var network_list [3][4]bool
 
 	msg_from_network := make(chan driver.Client)
-	order_to_network := make(chan driver.Client, 10)
-	order_from_network := make(chan driver.Client, 10)
-	order_from_cost := make(chan driver.Client, 10)
+	order_to_network := make(chan driver.Client, 1)
+	order_from_network := make(chan driver.Client, 1)
+	order_from_cost := make(chan driver.Client, 1)
+	set_lights_c := make(chan driver.Lights, 1)
+	set_light_c := make(chan driver.Lights, 1)
+	del_orders_c := make(chan driver.Order, 1)
+	del_order_c := make(chan driver.Order, 1)
 
 	localIP, _ := LocalIP()
 	fmt.Println(localIP, "\n")
 
 	go Read_msg(msg_from_network, localIP, all_clients_m)
 	go Send_msg(order_to_network)
-	go Read_alive(all_ips_m, localIP)
+	go Read_alive(all_ips_m, all_clients_m, localIP)
 	go Send_alive()
 	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, localIP, all_clients_m)
 
@@ -50,14 +55,17 @@ func Initialize_elevator() (init_elevator, init_hardware bool, prev driver.Order
 	return init_elevator, init_hardware, current_floor
 }
 
-func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, localIP net.IP, all_clients map[string]driver.Client) {
+func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, localIP net.IP, all_clients map[string]driver.Client, set_light_c chan Lights, del_order_c chan Order) {
 	for {
 		select {
 		case new_order := <-msg_from_network:
 			fmt.Println("msg_from_network: ", new_order.Ip.String())
-			driver.Elev_set_button_lamp(new_order.Button, new_order.Floor, 1)
 			all_clients[new_order.Ip.String()] = new_order
 			priorityHandler(new_order, order_from_cost, all_clients)
+		case set_light := <-set_light_c:
+			driver.Elev_set_button_lamp(set_light.Button, set_light.Floor, 1)
+		case delete_order := <-del_order_c:
+
 		case send_order := <-order_from_cost:
 			if send_order.Ip_from_cost.String() == localIP.String() {
 				order_from_network <- send_order
@@ -69,25 +77,35 @@ func Inter_process_communication(msg_from_network chan driver.Client, order_from
 	}
 }
 
-func Read_msg(msg_from_network chan driver.Client, localIP net.IP, all_clients map[string]driver.Client) {
+func Read_msg(msg_from_network chan driver.Client, localIP net.IP, all_clients map[string]driver.Client, set_light_c driver.Lights, del_order_c driver.Order) {
 	laddr, err_conv_ip_listen := net.ResolveUDPAddr("udp", ":20003")
 	Check_error(err_conv_ip_listen)
 	listener, err_listen := net.ListenUDP("udp", laddr)
 	Check_error(err_listen)
-	var msg_decoded driver.Client
+	var decoded_client driver.Client
+	var decoded_lights driver.Lights
+	var decoded_deleted driver.Order
 	for {
 		b := make([]byte, 1024)
-		n, _, _ := listener.ReadFromUDP(b)
-		err_decoding := json.Unmarshal(b[0:n], &msg_decoded)
-		if err_decoding != nil {
-			fmt.Println("error DECODING order \n")
+		n, raddr, _ := listener.ReadFromUDP(b)
+		if raddr.IP.String() != localIP.String() {
+			err_decoding_client := json.Unmarshal(b[0:n], &decoded_client)
+			err_decoding_lights := json.Unmarshal(b[0:n], &decoded_lights)
+			err_decoding_deleted := json.Unmarshal(b[0:n], &decoded_deleted)
+			if err_decoding_client == nil {
+				msg_from_network <- decoded_client
+			}
+			if err_decoding_lights == nil {
+				set_light_c <- decoded_lights
+			}
+			if err_decoding_deleted == nil {
+				del_order_c <- decoded_deleted
+			}
 		}
-		Check_error(err_decoding)
-		msg_from_network <- msg_decoded
 	}
 }
 
-func Send_msg(order_to_network chan driver.Client) {
+func Send_msg(order_to_network chan driver.Client, set_lights_c chan driver.Lights, del_orders_c chan driver.Order) {
 	baddr, err_conv_ip := net.ResolveUDPAddr("udp", "129.241.187.255:20003")
 	Check_error(err_conv_ip)
 	msg_sender, err_dialudp := net.DialUDP("udp", nil, baddr)
@@ -96,6 +114,20 @@ func Send_msg(order_to_network chan driver.Client) {
 		select {
 		case new_order := <-order_to_network:
 			msg_encoded, err_encoding := json.Marshal(new_order)
+			if err_encoding != nil {
+				fmt.Println("error encoding json \n")
+			}
+			Check_error(err_encoding)
+			msg_sender.Write(msg_encoded)
+		case set_lights := <-set_lights_c:
+			msg_encoded, err_encoding := json.Marshal(set_lights)
+			if err_encoding != nil {
+				fmt.Println("error encoding json \n")
+			}
+			Check_error(err_encoding)
+			msg_sender.Write(msg_encoded)
+		case del_orders := <-del_orders_c:
+			msg_encoded, err_encoding := json.Marshal(del_orders)
 			if err_encoding != nil {
 				fmt.Println("error encoding json \n")
 			}
@@ -116,28 +148,35 @@ func Send_alive() {
 	}
 }
 
-func Read_alive(all_ips map[string]time.Time, localIP net.IP) {
+func Read_alive(all_ips map[string]time.Time, all_clients map[string]driver.Client, localIP net.IP) {
 	laddr, err_conv_ip_listen := net.ResolveUDPAddr("udp", ":20020")
 	Check_error(err_conv_ip_listen)
 	alive_receiver, err_listen := net.ListenUDP("udp", laddr)
 	Check_error(err_listen)
+	var client driver.Client
 	for {
 		time.Sleep(50 * time.Millisecond)
 		b := make([]byte, 0)
 		_, raddr, _ := alive_receiver.ReadFromUDP(b)
 		if raddr.IP.String() != localIP.String() {
 			all_ips[raddr.IP.String()] = time.Now()
-			fmt.Println("IP: ", raddr.IP.String(), " msg: ", string(b))
+			client.Ip = raddr.IP
+			all_clients[raddr.IP.String()] = client
+			//fmt.Println("IP: ", raddr.IP.String(), " msg: ", string(b))
+		} else {
+			client.Ip = localIP
+			all_clients[raddr.IP.String()] = client
 		}
-		CheckForElapsedClients(all_ips)
+		CheckForElapsedClients(all_ips, all_clients)
 	}
 }
 
-func CheckForElapsedClients(all_ips map[string]time.Time) {
+func CheckForElapsedClients(all_ips map[string]time.Time, all_clients map[string]driver.Client) {
 	for key, value := range all_ips {
 		if time.Now().Sub(value) > 3*time.Second {
 			fmt.Println("Deleting IP: ", key, " ", value)
 			delete(all_ips, key)
+			delete(all_clients, key)
 		}
 	}
 }

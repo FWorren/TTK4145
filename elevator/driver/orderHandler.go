@@ -11,7 +11,7 @@ type Client struct {
 	Ip_from_cost  net.IP
 	Floor         int
 	Direction     int
-	Button        elev_button_type_t
+	Button        Elev_button_type_t
 	Current_floor int
 	State         State_t
 	Order_list    [3][4]bool
@@ -21,7 +21,12 @@ type Client struct {
 type Order struct {
 	Floor  int
 	Dir    int
-	Button elev_button_type_t
+	Button Elev_button_type_t
+}
+
+type Lights struct {
+	Floor  int
+	Button Elev_button_type_t
 }
 
 func OrderHandler_process_orders(order_from_network chan Client, order_to_network chan Client, current_floor Order, localIP net.IP) {
@@ -29,6 +34,7 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 	head_order_c := make(chan Order)
 	prev_order_c := make(chan Order)
 	del_Order := make(chan Order)
+	//convenient_floor := make(chan bool)
 	numb_orders_c := make(chan int)
 	state_c := make(chan State_t)
 	local_list_c := make(chan [3][4]bool)
@@ -56,17 +62,22 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 					local_list_c <- local_list
 				}
 			} else {
-				fmt.Println("Sending the order on a channel to the network. \n")
-				client.Floor = to_network.Floor
-				client.Button = to_network.Button
-				client.Ip = localIP
-				client.Current_floor = Prev_order.Floor
-				order_to_network <- client
+				if client.State != STOP_OBS {
+					fmt.Println("Sending the order on a channel to the network. \n")
+					client.Floor = to_network.Floor
+					client.Button = to_network.Button
+					client.Ip = localIP
+					client.Current_floor = Prev_order.Floor
+					order_to_network <- client
+				}
 			}
 		case from_network := <-order_from_network:
 			fmt.Println("recieving from network")
-			local_list[from_network.Button][from_network.Floor] = true
-			//local_list_c <- local_list
+			if !local_list[from_network.Button][from_network.Floor] {
+				local_list[from_network.Button][from_network.Floor] = true
+				client.Order_list[from_network.Button][from_network.Floor] = true
+				local_list_c <- local_list
+			}
 		case state = <-state_c:
 			fmt.Println("state = ", state)
 			client.State = state
@@ -237,3 +248,19 @@ func OrderHandler_state_down(local_list [3][4]bool, Head_order Order, Prev_order
 	Head_order.Dir = 1
 	return Head_order
 }
+
+/*
+func OrderHandler_check_convenient_order(local_list [3][4]bool, Prev_order Order) bool {
+	dir := Prev_order.Dir
+	floor := Prev_order.Floor
+	if dir == -1 {
+		if local_list[BUTTON_CALL_DOWN][floor] || local_list[BUTTON_COMMAND][floor] {
+			return true
+		}
+	} else {
+		if local_list[BUTTON_CALL_UP][floor] || local_list[BUTTON_COMMAND][floor] {
+			return true
+		}
+	}
+	return false
+}*/
