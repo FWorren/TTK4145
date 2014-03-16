@@ -27,17 +27,17 @@ type Order struct {
 type Lights struct {
 	Floor  int
 	Button Elev_button_type_t
+	Flag bool
 }
 
-func OrderHandler_process_orders(order_from_network chan Client, order_to_network chan Client, current_floor Order, localIP net.IP) {
-	order_internal := make(chan Order)
-	head_order_c := make(chan Order)
-	prev_order_c := make(chan Order)
-	del_Order := make(chan Order)
-	//convenient_floor := make(chan bool)
-	numb_orders_c := make(chan int)
-	state_c := make(chan State_t)
-	local_list_c := make(chan [3][4]bool)
+func OrderHandler_process_orders(order_from_network chan Client, order_to_network chan Client, send_lights_c chan Lights, send_del_req_c chan Order, current_floor Order, localIP net.IP) {
+	order_internal := make(chan Order, 1)
+	head_order_c := make(chan Order, 1)
+	prev_order_c := make(chan Order, 1)
+	del_Order := make(chan Order, 1)
+	numb_orders_c := make(chan int, 1)
+	state_c := make(chan State_t, 1)
+	local_list_c := make(chan [3][4]bool, 1)
 
 	var state State_t
 	var local_list [3][4]bool
@@ -130,14 +130,6 @@ func OrderHandler_search_for_orders(order_internal chan Order, local_list [3][4]
 		}
 	}
 }
-
-/*func Init_orderlist(client Client) {
-	for i := 0; i < 3; i++ {
-		for j := 0; j < 4; j++ {
-			client.Order_list[i][j] = false
-		}
-	}
-}*/
 
 func Check_number_of_local_orders(numb_orders_c chan int, local_list_c chan [3][4]bool) {
 	numb_orders := 0

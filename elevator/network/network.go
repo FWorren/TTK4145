@@ -1,41 +1,40 @@
 package network
 
 import (
-	"fmt"
-	"net"
-	//"strings"
 	driver "../driver"
 	"encoding/json"
 	"time"
+	"fmt"
+	"net"
 )
+
 var network_list [3][4]bool
 
 func Network() {
 	all_ips_m := make(map[string]time.Time)
 	all_clients_m := make(map[string]driver.Client)
 
-
 	msg_from_network := make(chan driver.Client)
 	order_to_network := make(chan driver.Client, 1)
 	order_from_network := make(chan driver.Client, 1)
 	order_from_cost := make(chan driver.Client, 1)
-	//set_lights_c := make(chan driver.Lights, 1)
-	//set_light_c := make(chan driver.Lights, 1)
-	del_orders_c := make(chan driver.Order, 1)
+	send_lights_c := make(chan driver.Lights, 1)
+	set_light_c := make(chan driver.Lights, 1)
+	send_del_req_c := make(chan driver.Order, 1)
 	del_order_c := make(chan driver.Order, 1)
 
 	localIP, _ := LocalIP()
 	fmt.Println(localIP, "\n")
 
-	go Read_msg(msg_from_network, localIP, all_clients_m,set_light_c, del_order_c)
+	go Read_msg(msg_from_network, set_light_c, del_order_c, localIP, all_clients_m)
 	go Send_msg(order_to_network, set_lights_c, del_orders_c)
 	go Read_alive(all_ips_m, all_clients_m, localIP)
 	go Send_alive()
-	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, localIP, all_clients_m, del_order_c)
+	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, set_light_c, del_order_c, localIP, all_clients_m)
 
 	init_elevator, init_hardware, current_floor := Initialize_elevator()
 	if init_elevator && init_hardware {
-		go driver.OrderHandler_process_orders(order_from_network, order_to_network, current_floor, localIP)
+		go driver.OrderHandler_process_orders(order_from_network, order_to_network, send_lights_c, send_del_req_c, current_floor, localIP)
 	}
 
 	neverQuit := make(chan string)
@@ -56,7 +55,7 @@ func Initialize_elevator() (init_elevator, init_hardware bool, prev driver.Order
 	return init_elevator, init_hardware, current_floor
 }
 
-func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, localIP net.IP, all_clients map[string]driver.Client, del_order_c chan driver.Order) {
+func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, set_light_c chan driver.Order, del_order_c chan driver.Order, localIP net.IP, all_clients map[string]driver.Client) {
 	for {
 		select {
 		case new_order := <-msg_from_network:
@@ -64,10 +63,15 @@ func Inter_process_communication(msg_from_network chan driver.Client, order_from
 			all_clients[new_order.Ip.String()] = new_order
 			network_list[new_order.Button][new_order.Floor] = true
 			priorityHandler(new_order, order_from_cost, all_clients)
+		case set_light := <- set_light_c:
+			if set_light.Flag {
+				driver.Elev_set_button_lamp(set_light.Button, set_light.Floor, 1)
+			} else {
+				driver.Elev_set_button_lamp(set_light.Button, set_light.Floor, 0)
+			}
 		case delete_order := <-del_order_c:
 			network_list[delete_order.Button][delete_order.Floor] = false
 		case send_order := <-order_from_cost:
-			driver.Elev_set_button_lamp(send_order.Button, send_order.Floor, 1)
 			if send_order.Ip_from_cost.String() == localIP.String() {
 				order_from_network <- send_order
 				fmt.Println("order_from_network: ", send_order.Floor+1, "\n")
@@ -78,7 +82,7 @@ func Inter_process_communication(msg_from_network chan driver.Client, order_from
 	}
 }
 
-func Read_msg(msg_from_network chan driver.Client, localIP net.IP, all_clients map[string]driver.Client, set_light_c chan driver.Lights, del_order_c chan driver.Order) {
+func Read_msg(msg_from_network chan driver.Client, set_light_c chan driver.Lights, del_order_c chan driver.Order, localIP net.IP, all_clients map[string]driver.Client) {
 	laddr, err_conv_ip_listen := net.ResolveUDPAddr("udp", ":20003")
 	Check_error(err_conv_ip_listen)
 	listener, err_listen := net.ListenUDP("udp", laddr)
@@ -89,25 +93,23 @@ func Read_msg(msg_from_network chan driver.Client, localIP net.IP, all_clients m
 	for {
 		b := make([]byte, 1024)
 		n, raddr, _ := listener.ReadFromUDP(b)
-		if raddr.IP.String() == localIP.String() { //HUSK DETTE HER !=
-			err_decoding_client := json.Unmarshal(b[0:n], &decoded_client)
-			err_decoding_lights := json.Unmarshal(b[0:n], &decoded_lights)
-			err_decoding_deleted := json.Unmarshal(b[0:n], &decoded_deleted)
-			if err_decoding_client == nil {
-				fmt.Println("decoded: ",decoded_client)
+		if raddr.IP.String() != localIP.String() {
+			if json.Unmarshal(b[0:n], &decoded_client) == nil {
 				msg_from_network <- decoded_client
 			}
-			if err_decoding_lights == nil {
+			else if json.Unmarshal(b[0:n], &decoded_lights) == nil {
 				set_light_c <- decoded_lights
 			}
-			if err_decoding_deleted == nil {
+			else if json.Unmarshal(b[0:n], &decoded_deleted) == nil {
 				del_order_c <- decoded_deleted
+			} else {
+				fmt.Println("error decoding msg")
 			}
 		}
 	}
 }
 
-func Send_msg(order_to_network chan driver.Client, set_lights_c chan driver.Lights, del_orders_c chan driver.Order) {
+func Send_msg(order_to_network chan driver.Client, send_lights_c chan driver.Lights, send_del_req_c chan driver.Order) {
 	baddr, err_conv_ip := net.ResolveUDPAddr("udp", "129.241.187.255:20003")
 	Check_error(err_conv_ip)
 	msg_sender, err_dialudp := net.DialUDP("udp", nil, baddr)
@@ -115,27 +117,23 @@ func Send_msg(order_to_network chan driver.Client, set_lights_c chan driver.Ligh
 	for {
 		select {
 		case new_order := <-order_to_network:
-			fmt.Println("before json :",new_order)
 			msg_encoded, err_encoding := json.Marshal(new_order)
 			if err_encoding != nil {
-				fmt.Println("error encoding json \n")
+				fmt.Println("error encoding json: ", err_encoding)
 			}
-			Check_error(err_encoding)
 			msg_sender.Write(msg_encoded)
-		case set_lights := <-set_lights_c:
-			msg_encoded, err_encoding := json.Marshal(set_lights)
+		case send_lights := <-send_lights_c:
+			lights_encoded, err_encoding := json.Marshal(send_lights)
 			if err_encoding != nil {
-				fmt.Println("error encoding json \n")
+				fmt.Println("error encoding json: ", err_encoding)
 			}
-			Check_error(err_encoding)
-			msg_sender.Write(msg_encoded)
-		case del_orders := <-del_orders_c:
-			msg_encoded, err_encoding := json.Marshal(del_orders)
+			msg_sender.Write(lights_encoded)
+		case send_del_req := <-send_del_req_c:
+			delete_encoded, err_encoding := json.Marshal(send_del_req)
 			if err_encoding != nil {
-				fmt.Println("error encoding json \n")
+				fmt.Println("error encoding json: ", err_encoding)
 			}
-			Check_error(err_encoding)
-			msg_sender.Write(msg_encoded)
+			msg_sender.Write(delete_encoded)
 		}
 	}
 }
