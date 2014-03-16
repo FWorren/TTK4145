@@ -93,7 +93,7 @@ func Read_msg(msg_from_network chan driver.Client, set_light_c chan driver.Light
 	for {
 		b := make([]byte, 1024)
 		n, raddr, _ := listener.ReadFromUDP(b)
-		if raddr.IP.String() != localIP.String() {
+		if raddr.IP.String() == localIP.String() {
 			if json.Unmarshal(b[0:n], &decoded_client) == nil {
 				msg_from_network <- decoded_client
 			}

@@ -43,6 +43,7 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 	var local_list [3][4]bool
 	var client Client
 	var Head_order Order
+	var light Lights
 
 	state = UNDEF
 	Prev_order := current_floor
@@ -76,6 +77,11 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 			if !local_list[from_network.Button][from_network.Floor] {
 				local_list[from_network.Button][from_network.Floor] = true
 				client.Order_list[from_network.Button][from_network.Floor] = true
+				light.Floor = from_network.Floor
+				light.Button = from_network.Button
+				light.Flag = true
+				send_lights_c <- light
+				time.Sleep(25 * time.Millisecond)
 				local_list_c <- local_list
 			}
 		case state = <-state_c:
@@ -93,6 +99,11 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 		case del_msg := <-del_Order:
 			local_list[del_msg.Button][del_msg.Floor] = false
 			client.Order_list[del_msg.Button][del_msg.Floor] = false
+			light.Floor = del_msg.Floor
+			light.Button = del_msg.Button
+			light.Flag = false
+			send_lights_c <- light
+			time.Sleep(25 * time.Millisecond)
 			local_list_c <- local_list
 		}
 	}
