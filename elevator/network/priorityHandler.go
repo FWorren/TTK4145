@@ -10,7 +10,6 @@ import (
 
 func priorityHandler(external driver.Client, order_from_cost chan driver.Client, all_clients map[string]driver.Client) {
 	fmt.Println("Cost running \n")
-	fmt.Println("all clients : ", all_clients)
 	for key, value := range all_clients {
 		/*if value.Current_floor == external.Floor {
 			fmt.Println("er i riktig etg \n")

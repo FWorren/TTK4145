@@ -62,7 +62,7 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 					local_list_c <- local_list
 				}
 			} else {
-				if client.State != STOP_OBS {
+				if client.State != STOP_OBS && !local_list[to_network.Button][to_network.Floor]{
 					fmt.Println("Sending the order on a channel to the network. \n")
 					client.Floor = to_network.Floor
 					client.Button = to_network.Button
