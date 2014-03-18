@@ -204,12 +204,6 @@ func CheckForElapsedClients(all_ips map[string]time.Time, all_clients map[string
 	}
 }
 
-func Check_error(err error) {
-	if err != nil {
-		fmt.Println("error:", err)
-	}
-}
-
 func LocalIP() (net.IP, error) {
 	tt, err := net.Interfaces()
 	if err != nil {

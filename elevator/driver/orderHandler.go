@@ -85,7 +85,6 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 				local_list_c <- local_list
 				//time.Sleep(35 * time.Millisecond)
 				send_lights_c <- light
-				
 			}
 
 		case state = <-state_c:
@@ -115,8 +114,6 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 			//time.Sleep(25 * time.Millisecond)
 			reset_list <- del_msg
 			send_del_req_c <- del_msg
-
-
 		}
 	}
 }
