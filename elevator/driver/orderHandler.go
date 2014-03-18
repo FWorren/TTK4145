@@ -38,7 +38,7 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 	reset_list := make(chan Order,1)
 	numb_orders_c := make(chan int, 1)
 	state_c := make(chan State_t, 1)
-	local_list_c := make(chan [3][4]bool)
+	local_list_c := make(chan [3][4]bool,1)
 
 	var state State_t
 	var local_list [3][4]bool
@@ -56,22 +56,24 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 		time.Sleep(25 * time.Millisecond)
 		select {
 		case to_network := <-order_internal:
+			client.Floor = to_network.Floor
+			client.Button = to_network.Button
+			client.Ip = localIP
+			client.Current_floor = Prev_order.Floor
 			if to_network.Button == BUTTON_COMMAND {
 				if !local_list[BUTTON_COMMAND][to_network.Floor] {
 					local_list[BUTTON_COMMAND][to_network.Floor] = true
 					client.Order_list[BUTTON_COMMAND][to_network.Floor] = true
 					local_list_c <- local_list
+					order_to_network <- client
 				}
 			} else {
 				if client.State != STOP_OBS { 
 					fmt.Println("Sending the order on a channel to the network. \n")
-					client.Floor = to_network.Floor
-					client.Button = to_network.Button
-					client.Ip = localIP
-					client.Current_floor = Prev_order.Floor
 					order_to_network <- client
 				}
 			}
+
 		case from_network := <-order_from_network:
 			//fmt.Println("recieving from network")
 			if !local_list[from_network.Button][from_network.Floor] {
@@ -85,18 +87,22 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 				send_lights_c <- light
 				
 			}
+
 		case state = <-state_c:
 		//	fmt.Println("state = ", state)
 			client.State = state
+
 		case numb_orders := <-numb_orders_c:
 		//	fmt.Println("Number of orders: ", numb_orders)
 			if (state == WAIT || state == UNDEF) && numb_orders > 0 {
 				Head_order = OrderHandler_set_head_order(local_list, Head_order, Prev_order)
 				head_order_c <- Head_order
 			}
+
 		case Update_prev := <-prev_order_c:
 			Prev_order = Update_prev
 			client.Direction = Prev_order.Dir
+
 		case del_msg := <-del_Order:
 			local_list[del_msg.Button][del_msg.Floor] = false
 			client.Order_list[del_msg.Button][del_msg.Floor] = false
@@ -109,6 +115,8 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 			//time.Sleep(25 * time.Millisecond)
 			reset_list <- del_msg
 			send_del_req_c <- del_msg
+
+
 		}
 	}
 }
@@ -211,19 +219,19 @@ func OrderHandler_state_up(local_list [3][4]bool, Head_order Order, Prev_order O
 		return Head_order
 	}
 	for i := Prev_order.Floor; i < N_FLOORS; i++ {
-		if local_list[0][i] {
+		if local_list[BUTTON_CALL_UP][i] {
 			Head_order.Floor = i
 			Head_order.Dir = 1
 			Head_order.Button = BUTTON_CALL_UP
 			return Head_order
 		}
-		if local_list[1][i] {
+		if local_list[BUTTON_CALL_DOWN][i] {
 			Head_order.Floor = i
 			Head_order.Dir = 1
 			Head_order.Button = BUTTON_CALL_DOWN
 			return Head_order
 		}
-		if local_list[2][i] {
+		if local_list[BUTTON_COMMAND][i] {
 			Head_order.Floor = i
 			Head_order.Dir = 1
 			Head_order.Button = BUTTON_COMMAND
@@ -242,19 +250,19 @@ func OrderHandler_state_down(local_list [3][4]bool, Head_order Order, Prev_order
 		return Head_order
 	}
 	for i := Prev_order.Floor; i >= 0; i-- {
-		if local_list[0][i] {
+		if local_list[BUTTON_CALL_UP][i] {
 			Head_order.Floor = i
 			Head_order.Dir = -1
 			Head_order.Button = BUTTON_CALL_UP
 			return Head_order
 		}
-		if local_list[1][i] {
+		if local_list[BUTTON_CALL_DOWN][i] {
 			Head_order.Floor = i
 			Head_order.Dir = -1
 			Head_order.Button = BUTTON_CALL_DOWN
 			return Head_order
 		}
-		if local_list[2][i] {
+		if local_list[BUTTON_COMMAND][i] {
 			Head_order.Floor = i
 			Head_order.Dir = -1
 			Head_order.Button = BUTTON_COMMAND
@@ -266,18 +274,40 @@ func OrderHandler_state_down(local_list [3][4]bool, Head_order Order, Prev_order
 	return Head_order
 }
 
-/*
-func OrderHandler_check_convenient_order(local_list [3][4]bool, Prev_order Order) bool {
+func OrderHandler_check_convenient_order(local_list [3][4]bool,Prev_order Order) (flag bool,conv_ord Order) {
+	var Convenient_order Order
 	dir := Prev_order.Dir
 	floor := Prev_order.Floor
+	flag = false
 	if dir == -1 {
-		if local_list[BUTTON_CALL_DOWN][floor] || local_list[BUTTON_COMMAND][floor] {
-			return true
-		}
-	} else {
-		if local_list[BUTTON_CALL_UP][floor] || local_list[BUTTON_COMMAND][floor] {
-			return true
-		}
+		if local_list[BUTTON_CALL_DOWN][floor] {
+				Convenient_order.Button = BUTTON_CALL_DOWN
+				Convenient_order.Floor = floor
+				Convenient_order.Dir = dir
+				flag = true
+				return flag,Convenient_order
+		}else if local_list[BUTTON_COMMAND][floor] {
+				Convenient_order.Button = BUTTON_COMMAND
+				Convenient_order.Floor = floor
+				Convenient_order.Dir = dir
+				flag = true
+				return flag,Convenient_order
+			}
 	}
-	return false
-}*/
+	if dir == 1{
+		if local_list[BUTTON_CALL_UP][floor] {
+				Convenient_order.Button = BUTTON_CALL_UP
+				Convenient_order.Floor = floor
+				Convenient_order.Dir = dir
+				flag = true
+				return flag,Convenient_order
+		}else if local_list[BUTTON_COMMAND][floor] {
+				Convenient_order.Button = BUTTON_COMMAND
+				Convenient_order.Floor = floor
+				Convenient_order.Dir = dir
+				flag = true
+				return flag,Convenient_order
+			}
+	}
+	return flag, Convenient_order
+}

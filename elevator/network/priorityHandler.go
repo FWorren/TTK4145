@@ -39,13 +39,14 @@ func priorityHandler_getCost(client driver.Client, external driver.Client) int {
 	diff := external.Floor - client.Current_floor
 	cost = abs(diff)
 	direction := client.Direction
+	fmt.Println("MY direction = ",direction)
 	ordered_direction := 0
-	if diff < 0 {
+	if diff > 0 {
 		ordered_direction = 1
 	} else {
 		ordered_direction = -1
 	}
-
+	fmt.Println("Ordered direction = ",ordered_direction)
 	if ordered_direction != direction {
 		cost += 2
 		for i := 0; i < 4; i++ {
@@ -56,6 +57,9 @@ func priorityHandler_getCost(client driver.Client, external driver.Client) int {
 	}
 	return cost
 }
+
+
+
 
 func priorityHandler_sort_all_ips(all_clients map[string]driver.Client) net.IP {
 	cost_m := make(map[int]net.IP)

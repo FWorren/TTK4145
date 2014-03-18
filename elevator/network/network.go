@@ -42,7 +42,7 @@ func Network() {
 	<-neverQuit
 }
 
-func Initialize_elevator() (init_elevator, init_hardware bool, prev driver.Order) {
+func Initialize_elevator() (init_elevator bool, init_hardware bool, prev driver.Order) {
 	init_hardware = true
 	if driver.Elev_init() == 0 {
 		init_hardware = false
@@ -62,8 +62,10 @@ func Inter_process_communication(msg_from_network chan driver.Client, order_from
 		case new_order := <-msg_from_network:
 			//fmt.Println("msg_from_network: ", new_order.Ip.String())
 			all_clients[new_order.Ip.String()] = new_order
-			network_list[new_order.Button][new_order.Floor] = true
-			priorityHandler(new_order, order_from_cost, all_clients)
+			if new_order.Button != driver.BUTTON_COMMAND {
+				network_list[new_order.Button][new_order.Floor] = true
+				priorityHandler(new_order, order_from_cost, all_clients)
+			}
 		case set_light := <- set_light_c:
 			if set_light.Flag {
 				driver.Elev_set_button_lamp(set_light.Button, set_light.Floor, 1)
