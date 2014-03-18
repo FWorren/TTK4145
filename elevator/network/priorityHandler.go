@@ -9,19 +9,11 @@ import (
 )
 
 func priorityHandler(external driver.Client, order_from_cost chan driver.Client, all_clients map[string]driver.Client) {
-	//fmt.Println("Cost running \n")
 	for key, value := range all_clients {
-		/*if value.Current_floor == external.Floor {
-			fmt.Println("er i riktig etg \n")
-			value.Ip_from_cost := localIP
-			order_from_cost <- external
-			flag = true
-			break
-		}*/
 		value.Cost = priorityHandler_getCost(value, external)
 		all_clients[key] = value
 	}
-	
+
 	ip := priorityHandler_sort_all_ips(all_clients)
 	fmt.Println("order originated from IP :", external.Ip.String())
 	designated_client := all_clients[ip.String()]
@@ -30,39 +22,36 @@ func priorityHandler(external driver.Client, order_from_cost chan driver.Client,
 	designated_client.Ip_from_cost = ip
 	fmt.Println("designated client ip :", ip.String())
 	order_from_cost <- designated_client
-	//fmt.Println("End of cost function \n")
-
 }
 
 func priorityHandler_getCost(client driver.Client, external driver.Client) int {
 	cost := 0
 	diff := external.Floor - client.Current_floor
 	cost = abs(diff)
-	direction := client.Direction
 
-	fmt.Println("MY direction = ",direction)
-
-	ordered_direction := 0
 	if diff > 0 {
-		ordered_direction = 1
-	} else {
-		ordered_direction = -1
-	}
-
-	fmt.Println("Ordered direction = ",ordered_direction)
-	if ordered_direction != direction {
-		cost += 2
-		for i := 0; i < 4; i++ {
-			if client.Order_list[2][i] {
+		for i := client.Current_floor; i >= 0; i-- {
+			if client.Order_list[driver.BUTTON_COMMAND][i] {
+				cost += 1
+			}
+			if client.Order_list[driver.BUTTON_CALL_DOWN][i] {
 				cost += 1
 			}
 		}
+	} else if diff < 0 {
+		for i := client.Current_floor; i < 4; i++ {
+			if client.Order_list[driver.BUTTON_COMMAND][i] {
+				cost += 1
+			}
+			if client.Order_list[driver.BUTTON_CALL_UP][i] {
+				cost += 1
+			}
+		}
+	} else {
+		cost = 0
 	}
 	return cost
 }
-
-
-
 
 func priorityHandler_sort_all_ips(all_clients map[string]driver.Client) net.IP {
 	cost_m := make(map[int]net.IP)
@@ -76,8 +65,7 @@ func priorityHandler_sort_all_ips(all_clients map[string]driver.Client) net.IP {
 		counter++
 	}
 	sort.Ints(cost)
-	fmt.Println("cost =", cost)
-	fmt.Println("cost map: ",cost_m)
+	fmt.Println("cost sorted: ", cost)
 	return cost_m[cost[0]]
 }
 
