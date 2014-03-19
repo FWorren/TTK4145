@@ -28,7 +28,9 @@ func priorityHandler_getCost(client driver.Client, external driver.Client) int {
 	cost := 0
 	diff := external.Floor - client.Current_floor
 	cost = abs(diff)
-
+	if client.State == driver.STOPS || client.State == driver.STOP_OBS {
+		cost += 20
+	}
 	if diff > 0 {
 		for i := client.Current_floor; i >= 0; i-- {
 			if client.Order_list[driver.BUTTON_COMMAND][i] {

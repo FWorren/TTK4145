@@ -23,21 +23,22 @@ func Network() {
 	set_light_c := make(chan driver.Lights, 1)
 	send_del_req_c := make(chan driver.Order, 1)
 	del_order_c := make(chan driver.Order, 1)
+	order_complete_c := make(chan driver.Order,1)
 
 	localIP, _ := LocalIP()
 	fmt.Println(localIP, "\n")
 
 	init_elevator, init_hardware, current_floor := Initialize_elevator()
 	if init_elevator && init_hardware {
-		go driver.OrderHandler_process_orders(order_from_network, order_to_network, status_update_c, send_lights_c, send_del_req_c, current_floor, localIP)
+		go driver.OrderHandler_process_orders(order_from_network, order_to_network, status_update_c, send_lights_c, send_del_req_c,order_complete_c ,current_floor, localIP)
 	}
 
 	go Read_msg(msg_from_network, set_light_c, del_order_c, localIP, all_clients_m)
 	go Send_msg(order_to_network, send_lights_c, send_del_req_c)
 	go Read_alive(all_ips_m, all_clients_m, localIP)
 	go Send_alive(status_update_c)
-	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, set_light_c, del_order_c, localIP, all_clients_m)
-
+	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, set_light_c, del_order_c, localIP, all_clients_m, order_complete_c)
+	go Get_kill_sig()
 	neverQuit := make(chan string)
 	<-neverQuit
 }
@@ -56,12 +57,12 @@ func Initialize_elevator() (init_elevator bool, init_hardware bool, prev driver.
 	return init_elevator, init_hardware, current_floor
 }
 
-func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, set_light_c chan driver.Lights, del_order_c chan driver.Order, localIP net.IP, all_clients map[string]driver.Client) {
+func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, set_light_c chan driver.Lights, del_order_c chan driver.Order, localIP net.IP, all_clients map[string]driver.Client, order_complete_c chan driver.Order) {
 	for {
 		select {
 		case new_order := <-msg_from_network:
 			all_clients[new_order.Ip.String()] = new_order
-			if new_order.Button != driver.BUTTON_COMMAND {
+			if new_order.Button != driver.BUTTON_COMMAND  {
 				network_list[new_order.Button][new_order.Floor] = true
 				priorityHandler(new_order, order_from_cost, all_clients)
 			}
@@ -73,6 +74,8 @@ func Inter_process_communication(msg_from_network chan driver.Client, order_from
 			}
 		case delete_order := <-del_order_c:
 			network_list[delete_order.Button][delete_order.Floor] = false
+			order_complete_c <- delete_order
+
 		case send_order := <-order_from_cost:
 			if send_order.Ip_from_cost.String() == localIP.String() {
 				order_from_network <- send_order
@@ -165,7 +168,7 @@ func Send_alive(status_update_c chan driver.Client) {
 			}
 			status_encoded = append([]byte("status"), status_encoded...)
 			alive_sender.Write([]byte(status_encoded))
-		case <-time.After(1000 * time.Millisecond):
+		case <-time.After(100 * time.Millisecond):
 			alive_sender.Write([]byte("alive?"))
 		}
 
@@ -189,16 +192,9 @@ func Read_alive(all_ips map[string]time.Time, all_clients map[string]driver.Clie
 			if err_decoding != nil {
 				fmt.Println("error decoding client msg")
 			}
-			flag := true
-			for key, _ := range all_clients {
-				if key == raddr.IP.String() {
-					flag = false
-				}
-			}
-			if flag {
-				status_decoded.Ip = raddr.IP
-				all_clients[raddr.IP.String()] = status_decoded
-			}
+			status_decoded.Ip = raddr.IP
+			all_clients[raddr.IP.String()] = status_decoded
+			Write_to_file(status_decoded)
 		case "alive?":
 			all_ips[raddr.IP.String()] = time.Now()
 		}
