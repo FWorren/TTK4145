@@ -26,13 +26,25 @@ func priorityHandler(external driver.Client, order_from_cost chan driver.Client,
 
 func priorityHandler_getCost(client driver.Client, external driver.Client) int {
 	cost := 0
-	diff := external.Floor - client.Current_floor
-	cost = abs(diff)
 	if client.State == driver.STOPS || client.State == driver.STOP_OBS {
 		cost += 20
 	}
-	if diff > 0 {
-		for i := client.Current_floor; i >= 0; i-- {
+	diff := external.Floor - client.Current_floor
+	cost = abs(diff)
+	if diff ==0 {
+		cost = 0
+	}
+
+	
+	fmt.Println("client Direction :" ,client.Direction)
+	for i := 0; i < driver.N_FLOORS; i++ {
+		if client.Order_list[driver.BUTTON_COMMAND][i] {
+			cost += 2
+		}
+	}
+
+	/*if diff <0 && external.Button == driver.BUTTON_CALL_UP {
+		for i := client.Current_floor-1; i >= 0; i-- {
 			if client.Order_list[driver.BUTTON_COMMAND][i] {
 				cost += 1
 			}
@@ -40,18 +52,31 @@ func priorityHandler_getCost(client driver.Client, external driver.Client) int {
 				cost += 1
 			}
 		}
-	} else if diff < 0 {
-		for i := client.Current_floor; i < 4; i++ {
+	}else if diff >0 && external.Button == driver.BUTTON_CALL_DOWN {
+
+	}
+
+	/*if diff > 0  {
+		for i := client.Current_floor+1; i >= 0; i-- {
 			if client.Order_list[driver.BUTTON_COMMAND][i] {
 				cost += 1
 			}
-			if client.Order_list[driver.BUTTON_CALL_UP][i] {
+			/*if client.Order_list[driver.BUTTON_CALL_DOWN][i] {
+				cost += 1
+			}
+		}
+	} else if diff < 0 {
+		for i := client.Current_floor-1; i < 4; i++ {
+			if client.Order_list[driver.BUTTON_COMMAND][i] {
+				cost += 1
+			}
+			/*if client.Order_list[driver.BUTTON_CALL_UP][i] {
 				cost += 1
 			}
 		}
 	} else {
 		cost = 0
-	}
+	}*/
 	return cost
 }
 

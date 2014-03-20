@@ -30,7 +30,7 @@ type Lights struct {
 	Flag   bool
 }
 
-func OrderHandler_process_orders(order_from_network chan Client, order_to_network chan Client, status_update_c chan Client, send_lights_c chan Lights, send_del_req_c chan Order, order_complete_c chan Order,current_floor Order, localIP net.IP) {
+func OrderHandler_process_orders(order_from_network chan Client, order_to_network chan Client, check_backup_c chan Client, status_update_c chan Client, send_lights_c chan Lights, send_del_req_c chan Order, order_complete_c chan Order,current_floor Order, localIP net.IP) {
 	order_internal := make(chan Order,1)
 	head_order_c := make(chan Order, 1)
 	prev_order_c := make(chan Order, 1)
@@ -44,13 +44,13 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 	var Head_order Order
 	var light Lights
 	state = UNDEF
+
 	Prev_order := current_floor
 	client.Current_floor = current_floor.Floor
 	client.Direction = current_floor.Dir
 
 	go Elevator_eventHandler(head_order_c, prev_order_c, del_Order, state_c)
 	go OrderHandler_search_for_orders(order_internal, reset_list_c)
-	go Check_number_of_local_orders(local_list)
 	
 	for {
 		select {
@@ -69,7 +69,6 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 					fmt.Println("Sending the order on a channel to the network. \n")
 					order_to_network <- client
 			}
-
 		case from_network := <-order_from_network:
 			local_list[from_network.Button][from_network.Floor] = true
 			client.Order_list[from_network.Button][from_network.Floor] = true
@@ -77,15 +76,15 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 			light.Button = from_network.Button
 			light.Flag = true
 			send_lights_c <- light
-
+		case backup_client := <- check_backup_c:
+			client.Order_list = get_backup_orders(backup_client)
+			local_list = client.Order_list
 		case state = <-state_c:
-			client.State = state
-			
+			client.State = state	
 		case Update_prev := <-prev_order_c:
 			Prev_order = Update_prev
 			client.Direction = Prev_order.Dir
 			client.Current_floor = Prev_order.Floor
-
 		case del_msg := <-del_Order:
 			local_list[del_msg.Button][del_msg.Floor] = false
 			client.Order_list[del_msg.Button][del_msg.Floor] = false
@@ -95,19 +94,29 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 			light.Flag = false
 			send_lights_c <- light
 			send_del_req_c <- del_msg
-
 		case completed_order := <-order_complete_c:
-			reset_list_c <- completed_order  // her må vi sjekke bekreftelse
-
-		case <-time.After(500 * time.Millisecond):
+			reset_list_c <- completed_order
+		case <-time.After(300 * time.Millisecond):
 			has_order := Check_number_of_local_orders(local_list)
 			if (state == WAIT || state == UNDEF) && has_order {
 				Head_order = OrderHandler_set_head_order(local_list, Head_order, Prev_order)
+				client.Direction = Head_order.Dir
 				head_order_c <- Head_order
 			}
 			status_update_c <- client
 		}
 	}
+}
+
+func get_backup_orders(client Client) [3][4]bool {
+	var command_list [3][4]bool
+	for i := 0; i < N_FLOORS; i++ {
+		if client.Order_list[BUTTON_COMMAND][i] {
+			command_list[BUTTON_COMMAND][i] = true
+			Elev_set_button_lamp(BUTTON_COMMAND, i, 1)
+		}
+	}
+	return command_list
 }
 
 func OrderHandler_search_for_orders(order_internal chan Order, reset_list_c chan Order) {

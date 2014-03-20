@@ -19,6 +19,8 @@ func Network() {
 	order_from_network := make(chan driver.Client, 1)
 	order_from_cost := make(chan driver.Client, 1)
 	status_update_c := make(chan driver.Client, 1)
+	check_backup_c := make(chan driver.Client, 1)
+	lost_orders_c := make(chan driver.Client, 1)
 	send_lights_c := make(chan driver.Lights, 1)
 	set_light_c := make(chan driver.Lights, 1)
 	send_del_req_c := make(chan driver.Order, 1)
@@ -26,19 +28,25 @@ func Network() {
 	order_complete_c := make(chan driver.Order,1)
 
 	localIP, _ := LocalIP()
-	fmt.Println(localIP, "\n")
+	fmt.Println(localIP)
 
 	init_elevator, init_hardware, current_floor := Initialize_elevator()
 	if init_elevator && init_hardware {
-		go driver.OrderHandler_process_orders(order_from_network, order_to_network, status_update_c, send_lights_c, send_del_req_c,order_complete_c ,current_floor, localIP)
+		go driver.OrderHandler_process_orders(order_from_network, order_to_network, check_backup_c, status_update_c, send_lights_c, send_del_req_c,order_complete_c ,current_floor, localIP)
+	}
+
+	restore_ok := Restore_command_orders(check_backup_c, localIP)
+	if !restore_ok {
+		fmt.Println("No orders to restore")
 	}
 
 	go Read_msg(msg_from_network, set_light_c, del_order_c, localIP, all_clients_m)
 	go Send_msg(order_to_network, send_lights_c, send_del_req_c)
-	go Read_alive(all_ips_m, all_clients_m, localIP)
+	go Read_alive(lost_orders_c, all_ips_m, all_clients_m, localIP)
 	go Send_alive(status_update_c)
-	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, set_light_c, del_order_c, localIP, all_clients_m, order_complete_c)
+	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, lost_orders_c, set_light_c, del_order_c, localIP, all_clients_m, order_complete_c)
 	go Get_kill_sig()
+
 	neverQuit := make(chan string)
 	<-neverQuit
 }
@@ -54,10 +62,11 @@ func Initialize_elevator() (init_elevator bool, init_hardware bool, prev driver.
 	if !init_elevator {
 		fmt.Println("Unable to initialize elevator to floor\n")
 	}
+
 	return init_elevator, init_hardware, current_floor
 }
 
-func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, set_light_c chan driver.Lights, del_order_c chan driver.Order, localIP net.IP, all_clients map[string]driver.Client, order_complete_c chan driver.Order) {
+func Inter_process_communication(msg_from_network chan driver.Client, order_from_network chan driver.Client, order_from_cost chan driver.Client, lost_orders_c chan driver.Client, set_light_c chan driver.Lights, del_order_c chan driver.Order, localIP net.IP, all_clients map[string]driver.Client, order_complete_c chan driver.Order) {
 	for {
 		select {
 		case new_order := <-msg_from_network:
@@ -66,6 +75,8 @@ func Inter_process_communication(msg_from_network chan driver.Client, order_from
 				network_list[new_order.Button][new_order.Floor] = true
 				priorityHandler(new_order, order_from_cost, all_clients)
 			}
+		case lost_orders := <- lost_orders_c:
+			Search_for_lost_orders(lost_orders,order_from_cost,all_clients)
 		case set_light := <-set_light_c:
 			if set_light.Flag {
 				driver.Elev_set_button_lamp(set_light.Button, set_light.Floor, 1)
@@ -77,6 +88,7 @@ func Inter_process_communication(msg_from_network chan driver.Client, order_from
 			order_complete_c <- delete_order
 
 		case send_order := <-order_from_cost:
+			fmt.Println("ip from cost = ",send_order.Ip_from_cost.String())
 			if send_order.Ip_from_cost.String() == localIP.String() {
 				order_from_network <- send_order
 			}
@@ -97,7 +109,6 @@ func Read_msg(msg_from_network chan driver.Client, set_light_c chan driver.Light
 	for {
 		b := make([]byte, 1024)
 		n, _, _ := listener.ReadFromUDP(b)
-		//if raddr.IP.String() == localIP.String() {
 		code := string(b[:3])
 		switch code {
 		case "cli":
@@ -160,7 +171,6 @@ func Send_alive(status_update_c chan driver.Client) {
 	Check_error(err_dialudp)
 	for {
 		select {
-		//time.Sleep(100*time.Millisecond)
 		case status_update := <-status_update_c:
 			status_encoded, err_encoding := json.Marshal(status_update)
 			if err_encoding != nil {
@@ -175,14 +185,14 @@ func Send_alive(status_update_c chan driver.Client) {
 	}
 }
 
-func Read_alive(all_ips map[string]time.Time, all_clients map[string]driver.Client, localIP net.IP) {
+func Read_alive(lost_orders_c chan driver.Client, all_ips map[string]time.Time, all_clients map[string]driver.Client, localIP net.IP) {
 	laddr, err_conv_ip_listen := net.ResolveUDPAddr("udp", ":20020")
 	Check_error(err_conv_ip_listen)
 	alive_receiver, err_listen := net.ListenUDP("udp", laddr)
 	Check_error(err_listen)
 	var status_decoded driver.Client
 	for {
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 		b := make([]byte, 1024)
 		n, raddr, _ := alive_receiver.ReadFromUDP(b)
 		code := string(b[:6])
@@ -194,22 +204,34 @@ func Read_alive(all_ips map[string]time.Time, all_clients map[string]driver.Clie
 			}
 			status_decoded.Ip = raddr.IP
 			all_clients[raddr.IP.String()] = status_decoded
+			Sync_lights(status_decoded, localIP)
+
 			Write_to_file(status_decoded)
 		case "alive?":
 			all_ips[raddr.IP.String()] = time.Now()
 		}
-		CheckForElapsedClients(all_ips, all_clients)
+		terminated, trm_client := CheckForElapsedClients(all_ips, all_clients)
+		if terminated {
+			okay, lost_client := Restore_floorpanel_orders(trm_client.Ip)
+			if okay {
+				lost_orders_c <- lost_client
+			}
+		}
 	}
 }
 
-func CheckForElapsedClients(all_ips map[string]time.Time, all_clients map[string]driver.Client) {
+func CheckForElapsedClients(all_ips map[string]time.Time, all_clients map[string]driver.Client) (bool,driver.Client) {
+	var client driver.Client
 	for key, value := range all_ips {
-		if time.Now().Sub(value) > 3*time.Second {
+		if time.Now().Sub(value) > 2*time.Second {
 			fmt.Println("Deleting IP: ", key, " ", value)
+			client = all_clients[key]
 			delete(all_ips, key)
 			delete(all_clients, key)
+			return true, client
 		}
 	}
+	return false, client
 }
 
 func LocalIP() (net.IP, error) {

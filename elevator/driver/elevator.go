@@ -126,9 +126,7 @@ func Elevator_stop(state chan State_t) {
 	fmt.Println("The elevator has stopped!\n1. If you wish to order a new floor, do so, or.\n2. Press Ctrl + c to exit program.\n")
 	Elevator_clear_all_lights()
 	Elev_set_stop_lamp(1)
-	for {
-		time.Sleep(25 * time.Millisecond)
-	}
+	time.Sleep(1000 * time.Millisecond)
 }
 
 func Elevator_stop_obstruction(head_order_c chan Order, head_order Order, state chan State_t) {
