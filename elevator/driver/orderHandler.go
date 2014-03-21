@@ -59,7 +59,7 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 	client.Current_floor = current_floor.Floor
 	client.Direction = current_floor.Dir
 
-	go Elevator_eventHandler(head_order_c, prev_order_c, del_Order, state_c)
+	go Elevator_eventHandler(head_order_c, prev_order_c, del_Order, state_c, local_list)
 	go OrderHandler_search_for_orders(order_internal, reset_list_c, reset_all_c)
 
 	for {
@@ -309,19 +309,21 @@ func OrderHandler_state_down(local_list [3][4]bool, Head_order Order, Prev_order
 	return Head_order
 }
 
-/*func OrderHandler_check_convenient_order(local_list [3][4]bool, Prev_order Order) (flag bool, conv_ord Order) {
-	var Convenient_order Order
+func OrderHandler_check_convenient_order(local_list [3][4]bool, Prev_order Order) (flag bool, Convenient_order Order) {
 	dir := Prev_order.Dir
 	floor := Prev_order.Floor
 	flag = false
 	if dir == -1 {
+		fmt.Println("local list: ", local_list)
 		if local_list[BUTTON_CALL_DOWN][floor] {
+			fmt.Println("Got convenient order in :", Convenient_order.Floor+1)
 			Convenient_order.Button = BUTTON_CALL_DOWN
 			Convenient_order.Floor = floor
 			Convenient_order.Dir = dir
 			flag = true
 			return flag, Convenient_order
 		} else if local_list[BUTTON_COMMAND][floor] {
+			fmt.Println("Got convenient order in :", Convenient_order.Floor+1)
 			Convenient_order.Button = BUTTON_COMMAND
 			Convenient_order.Floor = floor
 			Convenient_order.Dir = dir
@@ -330,13 +332,16 @@ func OrderHandler_state_down(local_list [3][4]bool, Head_order Order, Prev_order
 		}
 	}
 	if dir == 1 {
+		fmt.Println("local list: ", local_list)
 		if local_list[BUTTON_CALL_UP][floor] {
+			fmt.Println("Got convenient order in :", Convenient_order.Floor+1)
 			Convenient_order.Button = BUTTON_CALL_UP
 			Convenient_order.Floor = floor
 			Convenient_order.Dir = dir
 			flag = true
 			return flag, Convenient_order
 		} else if local_list[BUTTON_COMMAND][floor] {
+			fmt.Println("Got convenient order in :", Convenient_order.Floor+1)
 			Convenient_order.Button = BUTTON_COMMAND
 			Convenient_order.Floor = floor
 			Convenient_order.Dir = dir
@@ -345,4 +350,4 @@ func OrderHandler_state_down(local_list [3][4]bool, Head_order Order, Prev_order
 		}
 	}
 	return flag, Convenient_order
-}*/
+}

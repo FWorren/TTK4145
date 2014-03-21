@@ -74,7 +74,7 @@ func Check_connectivity(disconnected chan int, netstate_c chan driver.NetState_t
 			timeOut = time.After(1 * time.Second)
 			select {
 			case <-connected:
-				netstate_c <- 1 // driver.ON
+				netstate_c <- 1
 				break
 			case <-timeOut:
 				netstate_c <- 0

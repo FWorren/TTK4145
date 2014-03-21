@@ -16,13 +16,13 @@ const (
 	UNDEF
 )
 
-func Elevator_eventHandler(head_order_c chan Order, prev_order_c chan Order, del_order chan Order, state_c chan State_t) {
-	floor_reached := make(chan bool,1)
-	obstruction := make(chan bool,1)
-	stop := make(chan bool,1)
-	get_prev_floor_c := make(chan Order,1)
-	delete_order := make(chan Order,1)
-	state := make(chan State_t,1)
+func Elevator_eventHandler(head_order_c chan Order, prev_order_c chan Order, del_order chan Order, state_c chan State_t, local_list [3][4]bool) {
+	floor_reached := make(chan Order, 1)
+	obstruction := make(chan bool, 1)
+	stop := make(chan bool, 1)
+	get_prev_floor_c := make(chan Order, 1)
+	delete_order := make(chan Order, 1)
+	state := make(chan State_t, 1)
 	var prev_order Order
 	prev_order.Floor = -1
 	var head_order Order
@@ -34,11 +34,11 @@ func Elevator_eventHandler(head_order_c chan Order, prev_order_c chan Order, del
 		case head_order = <-head_order_c:
 			if head_order.Floor == prev_order.Floor {
 				go Elevator_door(head_order, delete_order, state)
-			}else{
-				go Elevator_run(floor_reached, head_order, obstruction, stop, get_prev_floor_c, state)
+			} else {
+				go Elevator_run(floor_reached, head_order, obstruction, stop, get_prev_floor_c, state, local_list)
 			}
-		case <-floor_reached:
-			go Elevator_door(head_order, delete_order, state)
+		case reached := <-floor_reached:
+			go Elevator_door(reached, delete_order, state)
 		case <-obstruction:
 			go Elevator_stop_obstruction(head_order_c, head_order, state)
 		case <-stop:
@@ -71,7 +71,7 @@ func Elevator_init() (init bool, prev Order) {
 	}
 }
 
-func Elevator_run(floor_reached chan bool, head_order Order, obstruction chan bool, stop chan bool, get_prev_floor_c chan Order, state chan State_t) {
+func Elevator_run(floor_reached chan Order, head_order Order, obstruction chan bool, stop chan bool, get_prev_floor_c chan Order, state chan State_t, local_list [3][4]bool) {
 	Elev_set_speed(300 * head_order.Dir)
 	state <- RUN
 	for {
@@ -83,13 +83,18 @@ func Elevator_run(floor_reached chan bool, head_order Order, obstruction chan bo
 			current.Dir = head_order.Dir
 			get_prev_floor_c <- current
 			Elev_set_floor_indicator(current_floor)
-			if current_floor == head_order.Floor {
+			flag, convenient := OrderHandler_check_convenient_order(local_list, current)
+			if flag {
 				Elevator_break(head_order.Dir)
-				floor_reached <- true
+				floor_reached <- convenient
 				return
 			}
 		}
-		
+		if current_floor == head_order.Floor {
+			Elevator_break(head_order.Dir)
+			floor_reached <- head_order
+			return
+		}
 		if Elev_get_stop_signal() {
 			Elevator_break(head_order.Dir)
 			stop <- true
