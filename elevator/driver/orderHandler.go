@@ -9,8 +9,8 @@ import (
 type NetState_t int
 
 const (
-	ON NetState_t = iota
-	OFF
+	OFF NetState_t = iota
+	ON
 )
 
 type Client struct {
@@ -21,6 +21,7 @@ type Client struct {
 	Button        Elev_button_type_t
 	Current_floor int
 	State         State_t
+	NetState      NetState_t
 	Order_list    [3][4]bool
 	Cost          int
 }
@@ -37,7 +38,7 @@ type Lights struct {
 	Flag   bool
 }
 
-func OrderHandler_process_orders(order_from_network chan Client, order_to_network chan Client, check_backup_c chan Client, status_update_c chan Client, send_lights_c chan Lights, send_del_req_c chan Order, order_complete_c chan Order, disconnected chan int, current_floor Order, localIP net.IP) {
+func OrderHandler_process_orders(order_from_network chan Client, order_to_network chan Client, check_backup_c chan Client, status_update_c chan Client, send_lights_c chan Lights, send_del_req_c chan Order, order_complete_c chan Order, disconnected chan int, netstate_c chan NetState_t, current_floor Order, localIP net.IP) {
 	order_internal := make(chan Order, 1)
 	head_order_c := make(chan Order, 1)
 	prev_order_c := make(chan Order, 1)
@@ -52,9 +53,8 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 	var client Client
 	var Head_order Order
 	var light Lights
-	netState = ON
 	state = UNDEF
-
+	netState = ON
 	Prev_order := current_floor
 	client.Current_floor = current_floor.Floor
 	client.Direction = current_floor.Dir
@@ -73,12 +73,19 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 				if !local_list[BUTTON_COMMAND][to_network.Floor] {
 					local_list[BUTTON_COMMAND][to_network.Floor] = true
 					client.Order_list[BUTTON_COMMAND][to_network.Floor] = true
-					order_to_network <- client
+					if netState == ON {
+						order_to_network <- client
+					}
 				}
 			} else {
-				fmt.Println("Sending the order on a channel to the network. \n")
-				order_to_network <- client
+				if netState == ON {
+					fmt.Println("Sending the order on a channel to the network. \n")
+					order_to_network <- client
+				} else {
+					reset_list_c <- to_network
+				}
 			}
+
 		case from_network := <-order_from_network:
 			local_list[from_network.Button][from_network.Floor] = true
 			client.Order_list[from_network.Button][from_network.Floor] = true
@@ -106,8 +113,9 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 			send_del_req_c <- del_msg
 		case completed_order := <-order_complete_c:
 			reset_list_c <- completed_order
+		case netState = <-netstate_c:
+			client.NetState = netState
 		case <-disconnected:
-			netState = OFF
 			for i := 0; i < N_FLOORS; i++ {
 				local_list[BUTTON_CALL_DOWN][i] = false
 				local_list[BUTTON_CALL_UP][i] = false

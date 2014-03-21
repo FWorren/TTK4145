@@ -1,1 +1,1 @@
-{"Ip":"129.241.187.144","Ip_from_cost":"","Floor":0,"Direction":1,"Button":2,"Current_floor":3,"State":2,"Order_list":[[false,false,false,false],[false,false,false,false],[false,false,false,false]],"Cost":0}
+{"Ip":"129.241.187.144","Ip_from_cost":"","Floor":0,"Direction":1,"Button":2,"Current_floor":1,"State":2,"NetState":1,"Order_list":[[false,false,false,false],[false,false,false,false],[false,false,false,false]],"Cost":0}

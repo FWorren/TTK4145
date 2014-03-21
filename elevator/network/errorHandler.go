@@ -65,7 +65,7 @@ func Sync_lights(all_clients map[string]driver.Client, localIP net.IP) {
 	}
 }
 
-func Check_connectivity(disconnected chan int) {
+func Check_connectivity(disconnected chan int, netstate_c chan driver.NetState_t) {
 	connected := make(chan bool)
 
 	go func() {
@@ -74,8 +74,10 @@ func Check_connectivity(disconnected chan int) {
 			timeOut = time.After(1 * time.Second)
 			select {
 			case <-connected:
+				netstate_c <- 1 // driver.ON
 				break
 			case <-timeOut:
+				netstate_c <- 0
 				disconnected <- 1
 			}
 		}

@@ -27,13 +27,14 @@ func Network() {
 	del_order_c := make(chan driver.Order, 1)
 	order_complete_c := make(chan driver.Order, 1)
 	disconnected := make(chan int, 1)
+	netstate_c := make(chan driver.NetState_t, 1)
 
 	localIP, _ := LocalIP()
 	fmt.Println(localIP)
 
 	init_elevator, init_hardware, current_floor := Initialize_elevator()
 	if init_elevator && init_hardware {
-		go driver.OrderHandler_process_orders(order_from_network, order_to_network, check_backup_c, status_update_c, send_lights_c, send_del_req_c, order_complete_c, disconnected, current_floor, localIP)
+		go driver.OrderHandler_process_orders(order_from_network, order_to_network, check_backup_c, status_update_c, send_lights_c, send_del_req_c, order_complete_c, disconnected, netstate_c, current_floor, localIP)
 	}
 
 	restore_ok := Restore_command_orders(check_backup_c, localIP)
@@ -48,7 +49,7 @@ func Network() {
 	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, lost_orders_c, set_light_c, del_order_c, localIP, all_clients_m, order_complete_c)
 	go Get_kill_sig()
 
-	go Check_connectivity(disconnected)
+	go Check_connectivity(disconnected, netstate_c)
 
 	neverQuit := make(chan string)
 	<-neverQuit
@@ -81,7 +82,6 @@ func Inter_process_communication(msg_from_network chan driver.Client, order_from
 		case lost_orders := <-lost_orders_c:
 			Search_for_lost_orders(lost_orders, order_from_cost, all_clients)
 		case set_light := <-set_light_c:
-			fmt.Println("set lights flag: ", set_light.Flag)
 			if set_light.Flag {
 				driver.Elev_set_button_lamp(set_light.Button, set_light.Floor, 1)
 			} else {
@@ -94,8 +94,6 @@ func Inter_process_communication(msg_from_network chan driver.Client, order_from
 			if send_order.Ip_from_cost.String() == localIP.String() {
 				order_from_network <- send_order
 			}
-		case <-time.After(10 * time.Second):
-			fmt.Println("timeout, 10 seconds has passed")
 		}
 	}
 }
@@ -180,8 +178,8 @@ func Send_alive(status_update_c chan driver.Client) {
 			}
 			status_encoded = append([]byte("status"), status_encoded...)
 			alive_sender.Write([]byte(status_encoded))
-		case <-time.After(100 * time.Millisecond):
-			alive_sender.Write([]byte("alive?"))
+			/*case <-time.After(100 * time.Millisecond):
+			alive_sender.Write([]byte("alive?"))*/
 		}
 
 	}
@@ -206,10 +204,11 @@ func Read_alive(lost_orders_c chan driver.Client, all_ips map[string]time.Time, 
 				fmt.Println("error decoding client msg")
 			}
 			status_decoded.Ip = raddr.IP
+			all_ips[raddr.IP.String()] = time.Now()
 			all_clients[raddr.IP.String()] = status_decoded
 			Write_to_file(status_decoded)
-		case "alive?":
-			all_ips[raddr.IP.String()] = time.Now()
+			/*case "alive?":
+			all_ips[raddr.IP.String()] = time.Now()*/
 		}
 		terminated, trm_client := CheckForElapsedClients(all_ips, all_clients)
 		if terminated {
