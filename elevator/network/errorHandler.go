@@ -3,18 +3,16 @@ package network
 import (
 	driver "../driver"
 	"fmt"
-	//"bufio"
-    //"io/ioutil"
-    "os"
-    "os/signal"
-    "net"
+	"net"
+	"os"
+	"os/signal"
+	"time"
 )
 
-func Restore_floorpanel_orders(ip net.IP) (bool,driver.Client) {
+func Restore_floorpanel_orders(ip net.IP) (bool, driver.Client) {
 	ip_last_digits := Get_last_ip_digits(ip)
 	file := "network/backup/data"
 	file += ip_last_digits
-	fmt.Println("attempting to read")
 	err, backup_client := Read_file(file)
 	fmt.Println("reading")
 	if !err {
@@ -39,7 +37,7 @@ func Search_for_lost_orders(client driver.Client, order_from_cost chan driver.Cl
 	}
 }
 
-func Restore_command_orders(check_backup_c chan driver.Client , localIP net.IP) bool {
+func Restore_command_orders(check_backup_c chan driver.Client, localIP net.IP) bool {
 	ip_last_digits := Get_last_ip_digits(localIP)
 	file := "network/backup/data"
 	file += ip_last_digits
@@ -51,24 +49,51 @@ func Restore_command_orders(check_backup_c chan driver.Client , localIP net.IP) 
 	return false
 }
 
-func Sync_lights(client driver.Client,localIP net.IP) {
-	if client.Ip.String() != localIP.String() {
-		for i := 0; i < driver.N_FLOORS; i++ {
-			if client.Order_list[driver.BUTTON_CALL_UP][i] {
-				driver.Elev_set_button_lamp(driver.BUTTON_CALL_UP,i,1)
+func Sync_lights(all_clients map[string]driver.Client, localIP net.IP) {
+	for key, value := range all_clients {
+		if key != localIP.String() {
+			for i := 0; i < driver.N_FLOORS; i++ {
+				if value.Order_list[driver.BUTTON_CALL_UP][i] {
+					driver.Elev_set_button_lamp(driver.BUTTON_CALL_UP, i, 1)
+				}
+				if value.Order_list[driver.BUTTON_CALL_DOWN][i] {
+					driver.Elev_set_button_lamp(driver.BUTTON_CALL_DOWN, i, 1)
+				}
 			}
-			if client.Order_list[driver.BUTTON_CALL_DOWN][i] {
-				driver.Elev_set_button_lamp(driver.BUTTON_CALL_DOWN,i,1)
-			}
+			break
 		}
 	}
 }
 
+func Check_connectivity(disconnected chan int) {
+	connected := make(chan bool)
+
+	go func() {
+		timeOut := make(<-chan time.Time)
+		for {
+			timeOut = time.After(1 * time.Second)
+			select {
+			case <-connected:
+				break
+			case <-timeOut:
+				disconnected <- 1
+			}
+		}
+	}()
+
+	for {
+		time.Sleep(200 * time.Millisecond)
+		_, err := net.LookupHost("google.com")
+		if err == nil {
+			connected <- true
+		}
+	}
+}
 
 func Get_kill_sig() {
 	sigchan := make(chan os.Signal, 10)
 	signal.Notify(sigchan, os.Interrupt)
-	<- sigchan
+	<-sigchan
 	fmt.Println("Program killed !")
 	driver.Elev_set_speed(0)
 	os.Exit(0)

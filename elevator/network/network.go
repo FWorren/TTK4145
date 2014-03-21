@@ -25,14 +25,15 @@ func Network() {
 	set_light_c := make(chan driver.Lights, 1)
 	send_del_req_c := make(chan driver.Order, 1)
 	del_order_c := make(chan driver.Order, 1)
-	order_complete_c := make(chan driver.Order,1)
+	order_complete_c := make(chan driver.Order, 1)
+	disconnected := make(chan int, 1)
 
 	localIP, _ := LocalIP()
 	fmt.Println(localIP)
 
 	init_elevator, init_hardware, current_floor := Initialize_elevator()
 	if init_elevator && init_hardware {
-		go driver.OrderHandler_process_orders(order_from_network, order_to_network, check_backup_c, status_update_c, send_lights_c, send_del_req_c,order_complete_c ,current_floor, localIP)
+		go driver.OrderHandler_process_orders(order_from_network, order_to_network, check_backup_c, status_update_c, send_lights_c, send_del_req_c, order_complete_c, disconnected, current_floor, localIP)
 	}
 
 	restore_ok := Restore_command_orders(check_backup_c, localIP)
@@ -46,6 +47,8 @@ func Network() {
 	go Send_alive(status_update_c)
 	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, lost_orders_c, set_light_c, del_order_c, localIP, all_clients_m, order_complete_c)
 	go Get_kill_sig()
+
+	go Check_connectivity(disconnected)
 
 	neverQuit := make(chan string)
 	<-neverQuit
@@ -71,13 +74,14 @@ func Inter_process_communication(msg_from_network chan driver.Client, order_from
 		select {
 		case new_order := <-msg_from_network:
 			all_clients[new_order.Ip.String()] = new_order
-			if new_order.Button != driver.BUTTON_COMMAND  {
+			if new_order.Button != driver.BUTTON_COMMAND {
 				network_list[new_order.Button][new_order.Floor] = true
 				priorityHandler(new_order, order_from_cost, all_clients)
 			}
-		case lost_orders := <- lost_orders_c:
-			Search_for_lost_orders(lost_orders,order_from_cost,all_clients)
+		case lost_orders := <-lost_orders_c:
+			Search_for_lost_orders(lost_orders, order_from_cost, all_clients)
 		case set_light := <-set_light_c:
+			fmt.Println("set lights flag: ", set_light.Flag)
 			if set_light.Flag {
 				driver.Elev_set_button_lamp(set_light.Button, set_light.Floor, 1)
 			} else {
@@ -86,9 +90,7 @@ func Inter_process_communication(msg_from_network chan driver.Client, order_from
 		case delete_order := <-del_order_c:
 			network_list[delete_order.Button][delete_order.Floor] = false
 			order_complete_c <- delete_order
-
 		case send_order := <-order_from_cost:
-			fmt.Println("ip from cost = ",send_order.Ip_from_cost.String())
 			if send_order.Ip_from_cost.String() == localIP.String() {
 				order_from_network <- send_order
 			}
@@ -198,14 +200,13 @@ func Read_alive(lost_orders_c chan driver.Client, all_ips map[string]time.Time, 
 		code := string(b[:6])
 		switch code {
 		case "status":
+
 			err_decoding := json.Unmarshal(b[6:n], &status_decoded)
 			if err_decoding != nil {
 				fmt.Println("error decoding client msg")
 			}
 			status_decoded.Ip = raddr.IP
 			all_clients[raddr.IP.String()] = status_decoded
-			Sync_lights(status_decoded, localIP)
-
 			Write_to_file(status_decoded)
 		case "alive?":
 			all_ips[raddr.IP.String()] = time.Now()
@@ -220,7 +221,7 @@ func Read_alive(lost_orders_c chan driver.Client, all_ips map[string]time.Time, 
 	}
 }
 
-func CheckForElapsedClients(all_ips map[string]time.Time, all_clients map[string]driver.Client) (bool,driver.Client) {
+func CheckForElapsedClients(all_ips map[string]time.Time, all_clients map[string]driver.Client) (bool, driver.Client) {
 	var client driver.Client
 	for key, value := range all_ips {
 		if time.Now().Sub(value) > 2*time.Second {

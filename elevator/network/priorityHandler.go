@@ -21,6 +21,7 @@ func priorityHandler(external driver.Client, order_from_cost chan driver.Client,
 	designated_client.Button = external.Button
 	designated_client.Ip_from_cost = ip
 	fmt.Println("designated client ip :", ip.String())
+	fmt.Println("Order at floor: ", designated_client.Floor+1)
 	order_from_cost <- designated_client
 }
 
@@ -31,65 +32,55 @@ func priorityHandler_getCost(client driver.Client, external driver.Client) int {
 	}
 	diff := external.Floor - client.Current_floor
 	cost = abs(diff)
-	if diff ==0 {
-		cost = 0
-	}
 
-	
-	fmt.Println("client Direction :" ,client.Direction)
 	for i := 0; i < driver.N_FLOORS; i++ {
 		if client.Order_list[driver.BUTTON_COMMAND][i] {
+			cost += 2
+		}
+		if client.Order_list[driver.BUTTON_CALL_DOWN][i] {
+			cost += 2
+		}
+		if client.Order_list[driver.BUTTON_CALL_UP][i] {
 			cost += 2
 		}
 	}
 
 	/*if diff <0 && external.Button == driver.BUTTON_CALL_UP {
-		for i := client.Current_floor-1; i >= 0; i-- {
-			if client.Order_list[driver.BUTTON_COMMAND][i] {
-				cost += 1
+			for i := client.Current_floor-1; i >= 0; i-- {
+				if client.Order_list[driver.BUTTON_CALL_DOWN][i] {
+					cost += 1
+				}
 			}
-			if client.Order_list[driver.BUTTON_CALL_DOWN][i] {
-				cost += 1
+		}else if diff >0 && external.Button == driver.BUTTON_CALL_DOWN {
+			for i := 0; i < ; i++ {
+
 			}
 		}
-	}else if diff >0 && external.Button == driver.BUTTON_CALL_DOWN {
 
-	}
-
-	/*if diff > 0  {
-		for i := client.Current_floor+1; i >= 0; i-- {
-			if client.Order_list[driver.BUTTON_COMMAND][i] {
-				cost += 1
-			}
-			/*if client.Order_list[driver.BUTTON_CALL_DOWN][i] {
+	/*if diff > 0 {
+		for i := client.Current_floor + 1; i >= 0; i-- {
+			if client.Order_list[driver.BUTTON_CALL_UP][i] {
 				cost += 1
 			}
 		}
 	} else if diff < 0 {
-		for i := client.Current_floor-1; i < 4; i++ {
-			if client.Order_list[driver.BUTTON_COMMAND][i] {
+		for i := client.Current_floor - 1; i < 4; i++ {
+			if client.Order_list[driver.BUTTON_CALL_DOWN][i] {
 				cost += 1
 			}
-			/*if client.Order_list[driver.BUTTON_CALL_UP][i] {
-				cost += 1
-			}
-		}
-	} else {
-		cost = 0
-	}*/
+		}*/
+
 	return cost
 }
 
 func priorityHandler_sort_all_ips(all_clients map[string]driver.Client) net.IP {
 	cost_m := make(map[int]net.IP)
 	var cost []int
-	counter := 0
 	for _, value := range all_clients {
 		cost_m[value.Cost] = value.Ip
 	}
-	for i := range cost_m {
-		cost = append(cost, i)
-		counter++
+	for key, _ := range cost_m {
+		cost = append(cost, key)
 	}
 	sort.Ints(cost)
 	fmt.Println("cost sorted: ", cost)
