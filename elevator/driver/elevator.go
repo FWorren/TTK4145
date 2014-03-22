@@ -16,7 +16,7 @@ const (
 	UNDEF
 )
 
-func Elevator_eventHandler(head_order_c chan Order, prev_order_c chan Order, del_order chan Order, state_c chan State_t, local_list [3][4]bool) {
+func Elevator_eventHandler(head_order_c chan Order, prev_order_c chan Order, del_order chan Order, state_c chan State_t, convenient_list_c chan [3][4]bool) {
 	floor_reached := make(chan Order, 1)
 	obstruction := make(chan bool, 1)
 	stop := make(chan bool, 1)
@@ -35,7 +35,7 @@ func Elevator_eventHandler(head_order_c chan Order, prev_order_c chan Order, del
 			if head_order.Floor == prev_order.Floor {
 				go Elevator_door(head_order, delete_order, state)
 			} else {
-				go Elevator_run(floor_reached, head_order, obstruction, stop, get_prev_floor_c, state, local_list)
+				go Elevator_run(floor_reached, head_order, obstruction, stop, get_prev_floor_c, state, convenient_list_c)
 			}
 		case reached := <-floor_reached:
 			go Elevator_door(reached, delete_order, state)
@@ -71,9 +71,11 @@ func Elevator_init() (init bool, prev Order) {
 	}
 }
 
-func Elevator_run(floor_reached chan Order, head_order Order, obstruction chan bool, stop chan bool, get_prev_floor_c chan Order, state chan State_t, local_list [3][4]bool) {
+func Elevator_run(floor_reached chan Order, head_order Order, obstruction chan bool, stop chan bool, get_prev_floor_c chan Order, state chan State_t, convenient_list_c chan [3][4]bool) {
 	Elev_set_speed(300 * head_order.Dir)
 	state <- RUN
+	var flag bool
+	var convenient Order
 	for {
 		time.Sleep(10 * time.Millisecond)
 		current_floor := Elev_get_floor_sensor_signal()
@@ -83,7 +85,11 @@ func Elevator_run(floor_reached chan Order, head_order Order, obstruction chan b
 			current.Dir = head_order.Dir
 			get_prev_floor_c <- current
 			Elev_set_floor_indicator(current_floor)
-			flag, convenient := OrderHandler_check_convenient_order(local_list, current)
+			select {
+			case list := <-convenient_list_c:
+				flag, convenient = OrderHandler_check_convenient_order(list, current)
+			}
+
 			if flag {
 				Elevator_break(head_order.Dir)
 				floor_reached <- convenient

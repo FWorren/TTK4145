@@ -14,10 +14,10 @@ func Network() {
 	all_ips_m := make(map[string]time.Time)
 	all_clients_m := make(map[string]driver.Client)
 
-	msg_from_network := make(chan driver.Client)
+	msg_from_network := make(chan driver.Client, 1)
 	order_to_network := make(chan driver.Client, 1)
-	order_from_network := make(chan driver.Client, 1)
-	order_from_cost := make(chan driver.Client, 1)
+	order_from_network := make(chan driver.Client, 3)
+	order_from_cost := make(chan driver.Client, 3)
 	status_update_c := make(chan driver.Client, 1)
 	check_backup_c := make(chan driver.Client, 1)
 	lost_orders_c := make(chan driver.Client, 1)
@@ -44,12 +44,12 @@ func Network() {
 
 	go Read_msg(msg_from_network, set_light_c, del_order_c, localIP, all_clients_m)
 	go Send_msg(order_to_network, send_lights_c, send_del_req_c)
-	go Read_alive(lost_orders_c, all_ips_m, all_clients_m, localIP)
-	go Send_alive(status_update_c)
+	go Read_status(lost_orders_c, all_ips_m, all_clients_m, localIP)
+	go Send_status(status_update_c)
 	go Inter_process_communication(msg_from_network, order_from_network, order_from_cost, lost_orders_c, set_light_c, del_order_c, localIP, all_clients_m, order_complete_c)
 	go Get_kill_sig()
 
-	go Check_connectivity(disconnected, netstate_c)
+	go Check_connectivity(disconnected, netstate_c, all_clients_m, localIP)
 
 	neverQuit := make(chan string)
 	<-neverQuit
@@ -92,6 +92,7 @@ func Inter_process_communication(msg_from_network chan driver.Client, order_from
 			order_complete_c <- delete_order
 		case send_order := <-order_from_cost:
 			if send_order.Ip_from_cost.String() == localIP.String() {
+				fmt.Println("I will handle this order \n \n")
 				order_from_network <- send_order
 			}
 		}
@@ -164,10 +165,10 @@ func Send_msg(order_to_network chan driver.Client, send_lights_c chan driver.Lig
 	}
 }
 
-func Send_alive(status_update_c chan driver.Client) {
+func Send_status(status_update_c chan driver.Client) {
 	baddr, err_conv_ip := net.ResolveUDPAddr("udp", "129.241.187.255:20020")
 	Check_error(err_conv_ip)
-	alive_sender, err_dialudp := net.DialUDP("udp", nil, baddr)
+	status_sender, err_dialudp := net.DialUDP("udp", nil, baddr)
 	Check_error(err_dialudp)
 	for {
 		select {
@@ -177,24 +178,22 @@ func Send_alive(status_update_c chan driver.Client) {
 				fmt.Println("error encoding json: ", err_encoding)
 			}
 			status_encoded = append([]byte("status"), status_encoded...)
-			alive_sender.Write([]byte(status_encoded))
-			/*case <-time.After(100 * time.Millisecond):
-			alive_sender.Write([]byte("alive?"))*/
+			status_sender.Write([]byte(status_encoded))
 		}
 
 	}
 }
 
-func Read_alive(lost_orders_c chan driver.Client, all_ips map[string]time.Time, all_clients map[string]driver.Client, localIP net.IP) {
+func Read_status(lost_orders_c chan driver.Client, all_ips map[string]time.Time, all_clients map[string]driver.Client, localIP net.IP) {
 	laddr, err_conv_ip_listen := net.ResolveUDPAddr("udp", ":20020")
 	Check_error(err_conv_ip_listen)
-	alive_receiver, err_listen := net.ListenUDP("udp", laddr)
+	status_receiver, err_listen := net.ListenUDP("udp", laddr)
 	Check_error(err_listen)
 	var status_decoded driver.Client
 	for {
 		time.Sleep(25 * time.Millisecond)
 		b := make([]byte, 1024)
-		n, raddr, _ := alive_receiver.ReadFromUDP(b)
+		n, raddr, _ := status_receiver.ReadFromUDP(b)
 		code := string(b[:6])
 		switch code {
 		case "status":
@@ -207,8 +206,6 @@ func Read_alive(lost_orders_c chan driver.Client, all_ips map[string]time.Time, 
 			all_ips[raddr.IP.String()] = time.Now()
 			all_clients[raddr.IP.String()] = status_decoded
 			Write_to_file(status_decoded)
-			/*case "alive?":
-			all_ips[raddr.IP.String()] = time.Now()*/
 		}
 		terminated, trm_client := CheckForElapsedClients(all_ips, all_clients)
 		if terminated {

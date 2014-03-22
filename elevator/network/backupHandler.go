@@ -22,7 +22,7 @@ func Write_to_file(client driver.Client) {
 
 	_, err := os.Open(filename)
 	if err != nil {
-		fmt.Println("file seems to be empty, creating file..")
+		fmt.Println("No file to write to, creating file..")
 		_, _ = os.Create(filename)
 	}
 
@@ -38,7 +38,7 @@ func Read_file(file string) (bool, driver.Client) {
 
 	file_opened, err := os.Open(file)
 	if err != nil {
-		fmt.Println("file2 seems to be empty, creating file..")
+		fmt.Println("No file to read from, creating file..")
 		_, _ = os.Create(file)
 		return true, decoded_client
 	}

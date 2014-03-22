@@ -1,7 +1,7 @@
 package driver
 
 import (
-	"fmt"
+	//"fmt"
 	"net"
 	"time"
 )
@@ -46,6 +46,7 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 	reset_list_c := make(chan Order, 1)
 	state_c := make(chan State_t, 1)
 	reset_all_c := make(chan int, 1)
+	convenient_list_c := make(chan [3][4]bool, 1)
 
 	var state State_t
 	var netState NetState_t
@@ -54,15 +55,15 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 	var Head_order Order
 	var light Lights
 	state = UNDEF
-	netState = ON
 	Prev_order := current_floor
 	client.Current_floor = current_floor.Floor
 	client.Direction = current_floor.Dir
 
-	go Elevator_eventHandler(head_order_c, prev_order_c, del_Order, state_c, local_list)
+	go Elevator_eventHandler(head_order_c, prev_order_c, del_Order, state_c, convenient_list_c)
 	go OrderHandler_search_for_orders(order_internal, reset_list_c, reset_all_c)
-
+	timeOut := make(<-chan time.Time)
 	for {
+		timeOut = time.After(100 * time.Millisecond)
 		select {
 		case to_network := <-order_internal:
 			client.Floor = to_network.Floor
@@ -79,7 +80,6 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 				}
 			} else {
 				if netState == ON {
-					fmt.Println("Sending the order on a channel to the network. \n")
 					order_to_network <- client
 				} else {
 					reset_list_c <- to_network
@@ -102,6 +102,7 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 			Prev_order = Update_prev
 			client.Direction = Prev_order.Dir
 			client.Current_floor = Prev_order.Floor
+			convenient_list_c <- local_list
 		case del_msg := <-del_Order:
 			local_list[del_msg.Button][del_msg.Floor] = false
 			client.Order_list[del_msg.Button][del_msg.Floor] = false
@@ -125,7 +126,7 @@ func OrderHandler_process_orders(order_from_network chan Client, order_to_networ
 				Elev_set_button_lamp(BUTTON_CALL_UP, i, 0)
 			}
 			reset_all_c <- 1
-		case <-time.After(100 * time.Millisecond):
+		case <-timeOut:
 			has_order := Check_number_of_local_orders(local_list)
 			if (state == WAIT || state == UNDEF) && has_order {
 				Head_order = OrderHandler_set_head_order(local_list, Head_order, Prev_order)
@@ -309,21 +310,19 @@ func OrderHandler_state_down(local_list [3][4]bool, Head_order Order, Prev_order
 	return Head_order
 }
 
-func OrderHandler_check_convenient_order(local_list [3][4]bool, Prev_order Order) (flag bool, Convenient_order Order) {
+func OrderHandler_check_convenient_order(local_list [3][4]bool, Prev_order Order) (bool, Order) {
+	var Convenient_order Order
+	flag := false
 	dir := Prev_order.Dir
 	floor := Prev_order.Floor
-	flag = false
 	if dir == -1 {
-		fmt.Println("local list: ", local_list)
 		if local_list[BUTTON_CALL_DOWN][floor] {
-			fmt.Println("Got convenient order in :", Convenient_order.Floor+1)
 			Convenient_order.Button = BUTTON_CALL_DOWN
 			Convenient_order.Floor = floor
 			Convenient_order.Dir = dir
 			flag = true
 			return flag, Convenient_order
 		} else if local_list[BUTTON_COMMAND][floor] {
-			fmt.Println("Got convenient order in :", Convenient_order.Floor+1)
 			Convenient_order.Button = BUTTON_COMMAND
 			Convenient_order.Floor = floor
 			Convenient_order.Dir = dir
@@ -332,16 +331,13 @@ func OrderHandler_check_convenient_order(local_list [3][4]bool, Prev_order Order
 		}
 	}
 	if dir == 1 {
-		fmt.Println("local list: ", local_list)
 		if local_list[BUTTON_CALL_UP][floor] {
-			fmt.Println("Got convenient order in :", Convenient_order.Floor+1)
 			Convenient_order.Button = BUTTON_CALL_UP
 			Convenient_order.Floor = floor
 			Convenient_order.Dir = dir
 			flag = true
 			return flag, Convenient_order
 		} else if local_list[BUTTON_COMMAND][floor] {
-			fmt.Println("Got convenient order in :", Convenient_order.Floor+1)
 			Convenient_order.Button = BUTTON_COMMAND
 			Convenient_order.Floor = floor
 			Convenient_order.Dir = dir

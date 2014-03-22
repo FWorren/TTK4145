@@ -28,11 +28,13 @@ func Search_for_lost_orders(client driver.Client, order_from_cost chan driver.Cl
 			client.Floor = i
 			client.Button = driver.BUTTON_CALL_DOWN
 			priorityHandler(client, order_from_cost, all_clients)
+			//time.Sleep(10 * time.Millisecond)
 		}
 		if client.Order_list[driver.BUTTON_CALL_UP][i] {
 			client.Floor = i
 			client.Button = driver.BUTTON_CALL_UP
 			priorityHandler(client, order_from_cost, all_clients)
+			//time.Sleep(10 * time.Millisecond)
 		}
 	}
 }
@@ -65,8 +67,9 @@ func Sync_lights(all_clients map[string]driver.Client, localIP net.IP) {
 	}
 }
 
-func Check_connectivity(disconnected chan int, netstate_c chan driver.NetState_t) {
+func Check_connectivity(disconnected chan int, netstate_c chan driver.NetState_t, all_clients map[string]driver.Client, localIP net.IP) {
 	connected := make(chan bool)
+	sync := false
 
 	go func() {
 		timeOut := make(<-chan time.Time)
@@ -75,10 +78,15 @@ func Check_connectivity(disconnected chan int, netstate_c chan driver.NetState_t
 			select {
 			case <-connected:
 				netstate_c <- 1
+				if !sync {
+					Sync_lights(all_clients, localIP)
+					sync = true
+				}
 				break
 			case <-timeOut:
 				netstate_c <- 0
 				disconnected <- 1
+				sync = false
 			}
 		}
 	}()
